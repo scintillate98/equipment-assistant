@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>设备操作维护助手（中国电信上海应急通信局装备助手）</title>
+    <title>中国电信上海应急通信局装备助手</title>
     <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
@@ -294,8 +294,7 @@
                     </p>
                     <label class="upload-zone" id="kb-upload-zone">
                         <div>📁 点击上传文档到知识库</div>
-                        <div style="font-size:12px;color:var(--text-light);margin-top:6px;">支持 .pdf .docx .txt .md（AI可解析） / .ppt .pptx .xls .xlsx（仅存储）</div>
-                        <div style="font-size:12px;color:var(--text-light);margin-top:4px;">单个文件最大 50MB</div>
+                        <div style="font-size:12px;color:var(--text-light);margin-top:6px;">单个文件最大 50MB</div>
                         <input type="file" accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt,.md" multiple onchange="handleKBUpload(this)">
                     </label>
                     <div style="margin-top:12px;" id="kb-upload-status"></div>
@@ -505,7 +504,7 @@
             <input type="text" id="sup-equipment" placeholder="装备名称 *" required>
             <label class="upload-zone" style="margin-top:8px;display:block;">
                 <div>📎 点击上传文档</div>
-                <div style="font-size:12px;color:var(--text-light);margin-top:4px;">支持 PDF/DOCX/TXT/MD/PPT/XLS，单个文件最大 50MB</div>
+                <div style="font-size:12px;color:var(--text-light);margin-top:4px;">单个文件最大 50MB</div>
                 <input type="file" accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt,.md" id="sup-file-input" onchange="handleSupFileSelect(this)">
             </label>
             <div id="sup-file-name" style="font-size:12px;color:var(--success);margin-top:4px;"></div>
@@ -1073,7 +1072,7 @@
             const roleLabel = currentUser.role === 'admin' ? '管理员' : '用户';
             document.getElementById('current-role').textContent = roleLabel;
             const isAdmin = currentUser.role === 'admin';
-            document.getElementById('btn-add-equipment').style.display = isAdmin ? 'flex' : 'none';
+            document.getElementById('btn-add-equipment').style.display = 'flex';
             document.getElementById('nav-kb-admin').style.display = 'flex';
             document.getElementById('nav-kb-text').textContent = isAdmin ? '知识库管理' : '知识库补充';
             document.getElementById('nav-answer-rules').style.display = isAdmin ? 'flex' : 'none';
@@ -2399,7 +2398,20 @@
                 if (error) throw error;
 
                 await supabaseClient.from('pending_equipment_changes').update({ status: 'approved' }).eq('id', id);
-                showToast('已审核通过');
+                
+                const actionText = change.action_type === 'add' ? '新增装备' : (change.action_type === 'update' ? '修改装备' : '删除装备');
+                const equipmentName = change.payload.equipment_name || '未知装备';
+                
+                await supabaseClient.from('notifications').insert({
+                    title: '装备变更审核通过',
+                    content: `您申请的【${actionText}】操作已通过审核。装备名称：${equipmentName}`,
+                    sender_id: currentUser.id,
+                    sender_name: currentUser.name || currentUser.email || '管理员',
+                    target_all: false,
+                    target_users: [change.submitter_id]
+                });
+                
+                showToast('已审核通过并通知用户');
                 await loadPendingEquipmentTable();
                 await loadEquipmentInfoTable();
                 await updateAdminBadges();
