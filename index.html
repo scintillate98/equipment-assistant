@@ -1,0 +1,3194 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>设备操作维护助手（中国电信上海应急通信局装备助手）</title>
+    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
+    <style>
+        :root {
+            --bg: #f0f4f8;
+            --sidebar-bg: #1a1f2e;
+            --primary: #3b6ff5;
+            --primary-hover: #2854d4;
+            --success: #10b981;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+            --card: #ffffff;
+            --text: #1e293b;
+            --text-light: #64748b;
+            --border: #e2e8f0;
+            --shadow: 0 4px 24px rgba(0, 0, 0, 0.08);
+            --radius: 16px;
+            --radius-sm: 10px;
+            --transition: 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            --chat-user: #e8f0fe;
+            --chat-bot: #f8fafc;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+            background: var(--bg); color: var(--text); height: 100vh; display: flex; overflow: hidden;
+            -webkit-font-smoothing: antialiased;
+        }
+        .sidebar-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 9; }
+        .sidebar-overlay.active { display: block; }
+        .sidebar {
+            width: 260px; min-width: 260px; background: var(--sidebar-bg); color: #e2e8f0;
+            display: none; flex-direction: column; height: 100vh; z-index: 10;
+            box-shadow: 2px 0 20px rgba(0,0,0,0.15); transition: transform 0.3s ease;
+        }
+        @media (max-width: 768px) {
+            .sidebar { position: fixed; left: 0; top: 0; transform: translateX(-100%); }
+            .sidebar.open { transform: translateX(0); }
+            .main-area { width: 100%; }
+            .mobile-menu-btn { display: flex !important; }
+        }
+        .sidebar-header { padding: 24px 20px; border-bottom: 1px solid rgba(255,255,255,0.08); display: flex; align-items: center; gap: 12px; }
+        .sidebar-logo { width: 42px; height: 42px; border-radius: 12px; background: linear-gradient(135deg, #3b6ff5, #5b8af7); display: flex; align-items: center; justify-content: center; font-size: 20px; flex-shrink: 0; }
+        .sidebar-title { font-size: 15px; font-weight: 700; letter-spacing: 0.3px; line-height: 1.3; color: #fff; }
+        .sidebar-nav { flex: 1; padding: 12px; overflow-y: auto; }
+        .nav-item { display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-radius: 10px; cursor: pointer; transition: var(--transition); margin-bottom: 4px; font-size: 14px; color: #b0b8c8; user-select: none; }
+        .nav-item:hover { background: rgba(255,255,255,0.05); color: #e2e8f0; }
+        .nav-item.active { background: rgba(59,111,245,0.25); color: #fff; font-weight: 600; }
+        .nav-icon { font-size: 18px; width: 22px; text-align: center; flex-shrink: 0; }
+        .nav-badge { margin-left: auto; background: var(--danger); color: #fff; font-size: 11px; padding: 3px 8px; border-radius: 20px; font-weight: 600; min-width: 20px; text-align: center; }
+        .sidebar-footer { padding: 16px; border-top: 1px solid rgba(255,255,255,0.08); }
+        .user-info { display: flex; align-items: center; gap: 10px; padding: 8px; }
+        .user-avatar { width: 36px; height: 36px; border-radius: 50%; background: #475569; display: flex; align-items: center; justify-content: center; font-size: 16px; flex-shrink: 0; color: #fff; }
+        .user-detail { font-size: 13px; line-height: 1.4; overflow: hidden; }
+        .user-role { font-size: 11px; color: #94a3b8; }
+        .logout-btn { margin-left: auto; background: none; border: none; color: #94a3b8; cursor: pointer; font-size: 18px; padding: 6px; border-radius: 6px; transition: var(--transition); }
+        .logout-btn:hover { color: #ef4444; background: rgba(239,68,68,0.1); }
+        .main-area { flex: 1; display: none; flex-direction: column; height: 100vh; min-width: 0; position: relative; }
+        .main-header { padding: 16px 24px; background: var(--card); border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 16px; flex-shrink: 0; box-shadow: 0 1px 4px rgba(0,0,0,0.03); }
+        .mobile-menu-btn { display: none; width: 36px; height: 36px; border-radius: 8px; border: 1px solid var(--border); background: #fff; align-items: center; justify-content: center; cursor: pointer; font-size: 18px; flex-shrink: 0; }
+        .main-header h2 { font-size: 17px; font-weight: 700; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--success); animation: pulse 2s infinite; flex-shrink: 0; }
+        @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+        .panel { display: none; flex: 1; flex-direction: column; overflow: hidden; height: calc(100vh - 60px); }
+        .panel.active { display: flex; }
+        .chat-container { display: flex; flex-direction: column; height: 100%; }
+        .chat-messages { flex: 1; overflow-y: auto; padding: 20px 24px; display: flex; flex-direction: column; gap: 16px; scroll-behavior: smooth; }
+        @media (max-width: 768px) { .chat-messages { padding: 12px; } }
+        .message { display: flex; gap: 10px; max-width: 85%; animation: fadeInUp 0.3s ease; }
+        @keyframes fadeInUp { from{opacity:0;transform:translateY(12px)} to{opacity:1;transform:translateY(0)} }
+        .message.user { align-self: flex-end; flex-direction: row-reverse; }
+        .message.bot { align-self: flex-start; }
+        .msg-avatar { width: 36px; height: 36px; border-radius: 50%; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 16px; }
+        .message.user .msg-avatar { background: #dbeafe; color: #3b6ff5; }
+        .message.bot .msg-avatar { background: #e2e8f0; color: #475569; }
+        .msg-bubble { padding: 14px 18px; border-radius: 18px; line-height: 1.6; font-size: 14px; word-break: break-word; position: relative; }
+        .message.user .msg-bubble { background: var(--chat-user); border-bottom-right-radius: 6px; }
+        .message.bot .msg-bubble { background: var(--chat-bot); border: 1px solid var(--border); border-bottom-left-radius: 6px; box-shadow: 0 1px 3px rgba(0,0,0,0.04); }
+        .msg-bubble pre { background: #f1f5f9; padding: 10px; border-radius: 8px; overflow-x: auto; font-size: 12px; margin: 8px 0; }
+        .msg-bubble code { background: #f1f5f9; padding: 2px 4px; border-radius: 4px; font-size: 12px; }
+        .msg-bubble ul, .msg-bubble ol { margin: 8px 0; padding-left: 20px; }
+        .msg-bubble li { margin: 4px 0; }
+        .msg-bubble strong { color: var(--primary); }
+        .msg-meta { font-size: 11px; color: var(--text-light); margin-top: 4px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+        .intent-tag { font-size: 10px; padding: 3px 8px; border-radius: 12px; font-weight: 600; letter-spacing: 0.3px; white-space: nowrap; }
+        .intent-tag.maintainer { background: #fef3c7; color: #92400e; }
+        .intent-tag.beginner { background: #dbeafe; color: #1e40af; }
+        .intent-tag.narrator { background: #ede9fe; color: #5b21b6; }
+        .intent-tag.supplement { background: #d1fae5; color: #065f46; }
+        .intent-tag.irrelevant { background: #fee2e2; color: #991b1b; }
+        .intent-tag.ai { background: #e070ff; color: #3730a3; }
+        .intent-tag.report { background: #e0f2fe; color: #0369a1; }
+        .input-area { padding: 16px 24px; background: var(--card); border-top: 1px solid var(--border); flex-shrink: 0; box-shadow: 0 -1px 4px rgba(0,0,0,0.03); }
+        @media (max-width: 768px) { .input-area { padding: 12px; } }
+        .input-row { display: flex; gap: 10px; align-items: flex-end; }
+        .input-textarea { flex: 1; resize: none; border: 2px solid var(--border); border-radius: 14px; padding: 12px 16px; font-size: 14px; font-family: inherit; line-height: 1.5; outline: none; transition: var(--transition); min-height: 46px; max-height: 120px; background: #fafbfc; }
+        .input-textarea:focus { border-color: var(--primary); background: #fff; box-shadow: 0 0 0 3px rgba(59,111,245,0.08); }
+        .input-actions { display: flex; gap: 6px; flex-shrink: 0; }
+        .btn { padding: 10px 18px; border-radius: 12px; border: none; cursor: pointer; font-size: 14px; font-weight: 600; letter-spacing: 0.3px; transition: var(--transition); display: flex; align-items: center; gap: 6px; white-space: nowrap; }
+        .btn:disabled { opacity: 0.6; cursor: not-allowed; transform: none !important; }
+        .btn-primary { background: var(--primary); color: #fff; }
+        .btn-primary:hover:not(:disabled) { background: var(--primary-hover); transform: translateY(-1px); box-shadow: 0 4px 12px rgba(59,111,245,0.35); }
+        .btn-icon { width: 42px; height: 42px; border-radius: 50%; border: 2px solid var(--border); background: #fff; cursor: pointer; font-size: 18px; display: flex; align-items: center; justify-content: center; transition: var(--transition); flex-shrink: 0; color: #64748b; }
+        .btn-icon:hover { border-color: var(--primary); color: var(--primary); background: #f8faff; }
+        .btn-icon.recording { border-color: #ef4444; color: #ef4444; background: #fef2f2; animation: pulse-rec 1.2s infinite; }
+        @keyframes pulse-rec { 0%,100%{box-shadow:0 0 0 0 rgba(239,68,68,0.4)} 50%{box-shadow:0 0 0 14px rgba(239,68,68,0)} }
+        .file-preview { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; align-items: center; }
+        .file-chip { background: #f1f5f9; border-radius: 8px; padding: 6px 12px; font-size: 12px; display: flex; align-items: center; gap: 6px; animation: fadeInUp 0.2s ease; }
+        .file-chip .remove-file { cursor: pointer; color: #ef4444; font-weight: bold; font-size: 14px; }
+        .admin-container { padding: 20px 24px; overflow-y: auto; flex: 1; }
+        @media (max-width: 768px) { .admin-container { padding: 12px; } }
+        .admin-section { background: var(--card); border-radius: var(--radius); padding: 20px; margin-bottom: 20px; box-shadow: var(--shadow); border: 1px solid var(--border); position: relative; }
+        .admin-section h3 { font-size: 16px; margin-bottom: 16px; display: flex; align-items: center; gap: 8px; }
+        .table-wrap { overflow-x: auto; }
+        table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        th, td { padding: 10px 12px; text-align: left; border-bottom: 1px solid var(--border); }
+        th { background: #f8fafc; font-weight: 600; color: var(--text-light); font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; }
+        tr:hover td { background: #fafcfd; }
+        .badge { padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 600; }
+        .badge-success { background: #d1fae5; color: #065f46; }
+        .badge-warning { background: #fef3c7; color: #92400e; }
+        .badge-danger { background: #fee2e2; color: #991b1b; }
+        .badge-info { background: #dbeafe; color: #1e40af; }
+        .btn-sm { padding: 6px 12px; font-size: 12px; border-radius: 8px; border: none; cursor: pointer; font-weight: 600; transition: var(--transition); margin: 1px 3px; }
+        .btn-approve { background: #10b981; color: #fff; }
+        .btn-approve:hover { background: #059669; }
+        .btn-reject { background: #ef4444; color: #fff; }
+        .btn-reject:hover { background: #dc2626; }
+        .upload-zone { border: 2px dashed var(--border); border-radius: 12px; padding: 30px; text-align: center; cursor: pointer; transition: var(--transition); background: #fafcfd; margin-top: 12px; display: block; }
+        .upload-zone:hover { border-color: var(--primary); background: #f8faff; }
+        .upload-zone input { display: none; }
+        .modal-overlay { 
+            display: none; 
+            position: fixed; 
+            inset: 0; 
+            background: rgba(0,0,0,0.5); 
+            z-index: 100; 
+            align-items: center; 
+            justify-content: center; 
+            padding: 20px; 
+        }
+        #modal-auth.modal-overlay {
+            background-color: #f0f2f5;
+            background-image: url('刘行卫星站照片1.png'); 
+            background-size: cover; 
+            background-position: center bottom; 
+            background-repeat: no-repeat;
+            padding: 0;
+        }
+        .modal-overlay.active { display: flex; }
+        .modal { background: #fff; border-radius: var(--radius); padding: 28px; width: 100%; max-width: 440px; box-shadow: 0 20px 60px rgba(0,0,0,0.35); animation: fadeInUp 0.25s ease; max-height: 90vh; overflow-y: auto; }
+        .modal h3 { margin-bottom: 16px; font-size: 18px; }
+        .modal input, .modal select { width: 100%; padding: 10px 14px; border: 2px solid var(--border); border-radius: 10px; font-size: 14px; margin-bottom: 10px; outline: none; font-family: inherit; }
+        .modal input:focus, .modal select:focus { border-color: var(--primary); }
+        .modal .btn { width: 100%; justify-content: center; margin-top: 6px; }
+        .modal-close { float: right; background: none; border: none; font-size: 22px; cursor: pointer; color: #94a3b8; line-height: 1; }
+        .modal-close:hover { color: #1e293b; }
+        .spinner { width: 16px; height: 16px; border: 2px solid rgba(255,255,255,0.3); border-top-color: #fff; border-radius: 50%; animation: spin 0.8s linear infinite; display: inline-block; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .loading-overlay { position: absolute; inset: 0; background: rgba(255,255,255,0.8); display: none; align-items: center; justify-content: center; z-index: 50; border-radius: var(--radius); }
+        .loading-overlay.active { display: flex; }
+        .toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(100px); background: #1e293b; color: #fff; padding: 12px 24px; border-radius: 12px; font-size: 14px; z-index: 200; opacity: 0; transition: all 0.3s ease; pointer-events: none; white-space: nowrap; }
+        .toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
+        .ai-thinking { display: flex; align-items: center; gap: 6px; color: var(--text-light); font-size: 13px; padding: 8px 0; }
+        .ai-thinking .spinner { width: 14px; height: 14px; border-color: rgba(100,116,139,0.3); border-top-color: var(--primary); }
+        .parse-status { font-size: 12px; color: var(--text-light); margin-top: 4px; }
+        .parse-status.ok { color: var(--success); }
+        .parse-status.warn { color: var(--warning); }
+        .parse-status.err { color: var(--danger); }
+        .group-header td { background: #f8fafc !important; border-bottom: 2px solid var(--primary) !important; }
+        .notify-user-item { display: flex; align-items: center; gap: 8px; padding: 6px 0; font-size: 13px; cursor: pointer; }
+        .notify-user-item input { width: 16px; height: 16px; cursor: pointer; }
+        .notify-user-item:hover { background: #f8fafc; }
+        .notification-card { background: #f8fafc; border-radius: 10px; padding: 14px; margin-bottom: 10px; border: 1px solid var(--border); }
+        .notification-card.unread { border-left: 3px solid var(--primary); background: #fff; }
+        .notification-card .notify-title { font-weight: 600; font-size: 14px; margin-bottom: 4px; }
+        .notification-card .notify-meta { font-size: 11px; color: var(--text-light); margin-bottom: 6px; }
+        .notification-card .notify-content { font-size: 13px; line-height: 1.5; color: var(--text); }
+        .feedback-card { background: #f8fafc; border-radius: 10px; padding: 14px; margin-bottom: 10px; border: 1px solid var(--border); }
+        .feedback-card .fb-user { font-weight: 600; font-size: 13px; margin-bottom: 4px; }
+        .feedback-card .fb-meta { font-size: 11px; color: var(--text-light); margin-bottom: 6px; }
+        .feedback-card .fb-content { font-size: 13px; line-height: 1.5; color: var(--text); }
+        .stats-section { margin-bottom: 20px; }
+        .stats-section h4 { font-size: 14px; margin-bottom: 10px; color: var(--text); }
+        .pagination { display: flex; justify-content: center; align-items: center; gap: 6px; margin-top: 16px; padding: 8px; flex-wrap: wrap; }
+        .pagination-btn { padding: 6px 12px; border: 1px solid var(--border); background: #fff; border-radius: 8px; cursor: pointer; font-size: 13px; transition: var(--transition); color: var(--text); }
+        .pagination-btn:hover:not(:disabled) { border-color: var(--primary); color: var(--primary); }
+        .pagination-btn.active { background: var(--primary); color: #fff; border-color: var(--primary); font-weight: 600; }
+        .pagination-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+        .pagination-info { font-size: 12px; color: var(--text-light); margin: 0 8px; white-space: nowrap; }
+    </style>
+</head>
+<body>
+    <div class="sidebar-overlay" id="sidebar-overlay" onclick="toggleMobileSidebar()"></div>
+    <aside class="sidebar" id="sidebar">
+        <div class="sidebar-header">
+            <div class="sidebar-logo">🔧</div>
+            <span class="sidebar-title">装备助手</span>
+        </div>
+        <nav class="sidebar-nav">
+            <div class="nav-item active" data-panel="chat" onclick="switchPanel('chat')">
+                <span class="nav-icon">💬</span> <span>智能问答</span>
+            </div>
+            <div class="nav-item" data-panel="equipment-info" onclick="switchPanel('equipment-info')">
+                <span class="nav-icon">📡</span> <span>装备信息管理</span>
+            </div>
+            <div class="nav-item" data-panel="kb-admin" id="nav-kb-admin" onclick="switchPanel('kb-admin')">
+                <span class="nav-icon">📚</span> <span id="nav-kb-text">知识库管理</span>
+            </div>
+            <div class="nav-item" data-panel="answer-rules" id="nav-answer-rules" style="display:none;" onclick="switchPanel('answer-rules')">
+                <span class="nav-icon">📋</span> <span>回答守则</span>
+            </div>
+            <div class="nav-item" data-panel="usage-stats" id="nav-usage-stats" style="display:none;" onclick="switchPanel('usage-stats')">
+                <span class="nav-icon">📊</span> <span>使用统计</span>
+            </div>
+            <div class="nav-item" data-panel="user-admin" id="nav-user-admin" style="display:none;" onclick="switchPanel('user-admin')">
+                <span class="nav-icon">👥</span> <span>用户审核</span>
+                <span class="nav-badge" id="pending-badge" style="display:none;">0</span>
+            </div>
+            <div class="nav-item" data-panel="pending-equipment" id="nav-pending-equipment" style="display:none;" onclick="switchPanel('pending-equipment')">
+                <span class="nav-icon">⚖️</span> <span>装备变更审核</span>
+                <span class="nav-badge" id="eq-pending-badge" style="display:none;">0</span>
+            </div>
+            <div class="nav-item" data-panel="pending-docs" id="nav-pending-docs" style="display:none;" onclick="switchPanel('pending-docs')">
+                <span class="nav-icon">📝</span> <span>文档审核</span>
+                <span class="nav-badge" id="docs-badge" style="display:none;">0</span>
+            </div>
+            <div class="nav-item" data-panel="notifications" id="nav-notifications" onclick="switchPanel('notifications')">
+                <span class="nav-icon">🔔</span> <span>通知与反馈</span>
+                <span class="nav-badge" id="notify-badge" style="display:none;">0</span>
+            </div>
+        </nav>
+        <div class="sidebar-footer">
+            <div class="user-info">
+                <div class="user-avatar" id="user-avatar-display">👤</div>
+                <div class="user-detail">
+                    <strong id="current-username">未登录</strong>
+                    <div class="user-role" id="current-role"></div>
+                </div>
+                <button type="button" class="logout-btn" title="退出登录" onclick="logout()">退出</button>
+            </div>
+        </div>
+    </aside>
+
+    <div class="main-area" id="main-area">
+        <div class="main-header">
+            <button type="button" class="mobile-menu-btn" id="mobile-menu-btn" onclick="toggleMobileSidebar()">☰</button>
+            <div class="status-dot"></div>
+            <h2 id="panel-title">💬 智能问答</h2>
+            <span style="font-size:12px;color:var(--text-light);" id="kb-status">知识库加载中...</span>
+        </div>
+
+        <div class="panel active" id="panel-chat">
+            <div class="chat-container">
+                <div class="chat-messages" id="chat-messages">
+                    <div class="message bot">
+                        <div class="msg-avatar">🤖</div>
+                        <div>
+                            <div class="msg-bubble">您好！我是 AI 设备操作维护助手。<br>我已接入大语言模型，可以<strong>理解 PDF、Word、文本文档</strong>后为您智能作答。<br>请先登录，然后直接提问。</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="input-area" id="input-area" style="display:none;">
+                    <div class="file-preview" id="file-preview"></div>
+                    <div class="input-row">
+                        <textarea class="input-textarea" id="text-input" rows="1" placeholder="请输入您的问题...（支持文字/语音/图片/视频）" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendMessage();}"></textarea>
+                        <div class="input-actions">
+                            <button type="button" class="btn-icon" id="btn-voice" title="语音输入" onclick="toggleVoice()">🎤</button>
+                            <label class="btn-icon" title="上传图片" style="cursor:pointer;">📷<input type="file" accept="image/*" hidden onchange="handleFileUpload(this, 'image')"></label>
+                            <label class="btn-icon" title="上传视频" style="cursor:pointer;">🎬<input type="file" accept="video/*" hidden onchange="handleFileUpload(this, 'video')"></label>
+                            <label class="btn-icon" title="上传文档(PDF/DOCX/TXT/MD/PPT/XLS)" style="cursor:pointer;">📎<input type="file" accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt,.md" hidden onchange="handleFileUpload(this, 'document')"></label>
+                            <button type="button" class="btn btn-primary" id="btn-send" onclick="sendMessage()">发送 ➤</button>
+                        </div>
+                    </div>
+                    <div style="font-size:10px;color:var(--text-light);margin-top:6px;" id="voice-status"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="panel" id="panel-kb-admin">
+            <div class="admin-container">
+                <div class="admin-section">
+                    <div class="loading-overlay" id="kb-loading"><div class="spinner" style="border-color:rgba(59,111,245,0.2);border-top-color:var(--primary);width:32px;height:32px;"></div></div>
+                    <h3 id="kb-panel-header">📚 知识库文档管理</h3>
+                    <p style="font-size:13px;color:var(--text-light);margin-bottom:8px;" id="kb-panel-desc">
+                        💡 <strong>AI 解析说明：</strong>PDF、TXT、MD、DOCX 上传后会<strong>自动提取文本</strong>供 AI 理解；PPT/XLS/旧版DOC 仅保存文件，建议另存为 PDF 或复制内容到 TXT 上传。
+                    </p>
+                    <label class="upload-zone" id="kb-upload-zone">
+                        <div>📁 点击上传文档到知识库</div>
+                        <div style="font-size:12px;color:var(--text-light);margin-top:6px;">支持 .pdf .docx .txt .md（AI可解析） / .ppt .pptx .xls .xlsx（仅存储）</div>
+                        <div style="font-size:12px;color:var(--text-light);margin-top:4px;">单个文件最大 50MB</div>
+                        <input type="file" accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt,.md" multiple onchange="handleKBUpload(this)">
+                    </label>
+                    <div style="margin-top:12px;" id="kb-upload-status"></div>
+                </div>
+                <div class="admin-section" id="kb-list-section">
+                    <h3>📋 现有知识库文档</h3>
+                    <div class="table-wrap">
+                        <table>
+                            <thead><tr><th>归属装备</th><th>文档名称</th><th>类型</th><th>AI可读</th><th>上传人姓名</th><th>上传人电话</th><th>维护人姓名</th><th>维护人电话</th><th>操作</th></tr></thead>
+                            <tbody id="kb-table-body"></tbody>
+                        </table>
+                    </div>
+                    <div id="kb-pagination" class="pagination"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="panel" id="panel-user-admin">
+            <div class="admin-container">
+                <div class="admin-section">
+                    <h3>👥 用户注册审核</h3>
+                    <div class="table-wrap">
+                        <table>
+                            <thead><tr><th>邮箱</th><th>姓名</th><th>工号</th><th>单位部门</th><th>电话</th><th>状态</th><th>操作</th></tr></thead>
+                            <tbody id="user-table-body"></tbody>
+                        </table>
+                    </div>
+                    <div id="user-pagination" class="pagination"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="panel" id="panel-pending-equipment">
+            <div class="admin-container">
+                <div class="admin-section">
+                    <h3>⚖️ 待审核装备变更</h3>
+                    <div class="table-wrap">
+                        <table>
+                            <thead><tr><th>申请时间</th><th>变更类型</th><th>详情</th><th>申请人</th><th>操作</th></tr></thead>
+                            <tbody id="pending-equipment-table-body"></tbody>
+                        </table>
+                    </div>
+                    <div id="pending-equipment-pagination" class="pagination"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="panel" id="panel-pending-docs">
+            <div class="admin-container">
+                <div class="admin-section">
+                    <h3>📝 待审核补充文档</h3>
+                    <div class="table-wrap">
+                        <table>
+                            <thead><tr><th>文件名</th><th>装备名称</th><th>提供者</th><th>电话</th><th>邮箱</th><th>操作</th></tr></thead>
+                            <tbody id="pending-docs-table-body"></tbody>
+                        </table>
+                    </div>
+                    <div id="pending-docs-pagination" class="pagination"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="panel" id="panel-answer-rules">
+            <div class="admin-container">
+                <div class="admin-section">
+                    <h3>📋 AI 回答守则</h3>
+                    <p style="font-size:13px;color:var(--text-light);margin-bottom:12px;">
+                        以下守则将作为系统指令注入到每次 AI 回答中。支持 Markdown 格式。修改后即时生效。
+                    </p>
+                    <textarea id="answer-rules-editor" rows="20" style="width:100%;padding:12px 14px;border:2px solid var(--border);border-radius:10px;font-size:13px;font-family:monospace;line-height:1.6;outline:none;resize:vertical;background:#fafcfd;"></textarea>
+                    <div style="display:flex;gap:10px;margin-top:12px;">
+                        <button type="button" class="btn btn-primary" onclick="saveAnswerRules()" id="btn-save-rules">💾 保存守则</button>
+                        <button type="button" class="btn" style="background:var(--border);color:var(--text);" onclick="resetAnswerRules()">↩️ 恢复默认</button>
+                    </div>
+                    <div id="rules-save-status" style="margin-top:8px;font-size:12px;"></div>
+                </div>
+                <div class="admin-section">
+                    <h3>👁️ 预览效果</h3>
+                    <p style="font-size:13px;color:var(--text-light);margin-bottom:8px;">以下是将发送给 AI 的系统提示词预览：</p>
+                    <div id="rules-preview" style="background:#f8fafc;border:1px solid var(--border);border-radius:8px;padding:14px;font-size:12px;font-family:monospace;line-height:1.6;white-space:pre-wrap;max-height:300px;overflow-y:auto;color:var(--text);"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="panel" id="panel-usage-stats">
+            <div class="admin-container">
+                <div class="admin-section">
+                    <h3>📊 装备查询统计</h3>
+                    <div id="stats-equipment" style="font-size:13px;">加载中...</div>
+                    <div id="stats-equipment-pagination" class="pagination"></div>
+                </div>
+                <div class="admin-section">
+                    <h3>📊 类别查询统计</h3>
+                    <div id="stats-intent" style="font-size:13px;">加载中...</div>
+                </div>
+                <div class="admin-section">
+                    <h3>🔧 故障排查记录</h3>
+                    <div id="stats-troubleshoot" style="font-size:13px;">加载中...</div>
+                    <div id="stats-troubleshoot-pagination" class="pagination"></div>
+                </div>
+                <div class="admin-section" id="stats-token-section">
+                    <h3>📊 Token 消耗统计</h3>
+                    <div id="stats-token" style="font-size:13px;">加载中...</div>
+                    <div id="stats-token-pagination" class="pagination"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="panel" id="panel-equipment-info">
+            <div class="admin-container">
+                <div class="admin-section">
+                    <h3>📡 装备信息管理</h3>
+                    <button type="button" class="btn btn-primary" style="margin-bottom:12px; display:none;" onclick="openEquipmentModal()" id="btn-add-equipment">➕ 新增装备</button>
+                    <div class="table-wrap">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>装备名称</th>
+                                    <th>装备图片</th>
+                                    <th>装备数量</th>
+                                    <th>资产编号/车牌号</th>
+                                    <th>装备维护人姓名</th>
+                                    <th>装备维护人电话</th>
+                                    <th>维护文档</th>
+                                    <th>重大保障记录</th>
+                                    <th>操作</th>
+                                </tr>
+                            </thead>
+                            <tbody id="equipment-table-body"></tbody>
+                        </table>
+                    </div>
+                    <div id="equipment-pagination" class="pagination"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="panel" id="panel-notifications">
+            <div class="admin-container">
+                <!-- 管理员发送通知 -->
+                <div class="admin-section" id="admin-notify-section" style="display:none;">
+                    <h3>📢 发送通知</h3>
+                    <input type="text" id="notify-title" placeholder="通知标题 *">
+                    <textarea id="notify-content" placeholder="通知内容 *" rows="4" style="width:100%;padding:10px 14px;border:2px solid var(--border);border-radius:10px;font-size:14px;margin-top:10px;outline:none;font-family:inherit;resize:vertical;"></textarea>
+                    <div style="margin-top:12px;">
+                        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:14px;">
+                            <input type="checkbox" id="notify-all" onchange="toggleNotifyTarget()" style="width:16px;height:16px;">
+                            <span>发送给所有用户</span>
+                        </label>
+                    </div>
+                    <div id="notify-user-select" style="margin-top:12px;max-height:200px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;padding:8px;">
+                        <p style="font-size:12px;color:var(--text-light);margin-bottom:8px;">选择接收用户（可多选）：</p>
+                        <div id="notify-user-list">加载中...</div>
+                    </div>
+                    <button type="button" class="btn btn-primary" onclick="sendNotification()" id="btn-send-notify" style="margin-top:12px;">发送通知</button>
+                </div>
+
+                <!-- 通知列表 -->
+                <div class="admin-section">
+                    <h3>📨 通知列表</h3>
+                    <div id="notifications-list">加载中...</div>
+                    <div id="notifications-pagination" class="pagination"></div>
+                </div>
+
+                <!-- 用户提交反馈 -->
+                <div class="admin-section" id="user-feedback-section" style="display:none;">
+                    <h3>📝 提交反馈</h3>
+                    <textarea id="feedback-content" placeholder="请输入您的反馈或建议..." rows="4" style="width:100%;padding:10px 14px;border:2px solid var(--border);border-radius:10px;font-size:14px;outline:none;font-family:inherit;resize:vertical;"></textarea>
+                    <button type="button" class="btn btn-primary" onclick="submitFeedback()" id="btn-submit-feedback" style="margin-top:12px;">提交反馈</button>
+                </div>
+
+                <!-- 反馈记录 -->
+                <div class="admin-section">
+                    <h3>💬 反馈记录</h3>
+                    <div id="feedback-list">加载中...</div>
+                    <div id="feedback-pagination" class="pagination"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal-overlay active" id="modal-auth">
+        <div class="modal" style="background:rgba(255,255,255,0.95);box-shadow:0 20px 60px rgba(0,0,0,0.5);">
+            <h3 id="auth-title">🔐 登录</h3>
+            <input type="text" id="auth-email" placeholder="邮箱或手机号（均可登录）">
+            <input type="password" id="auth-password" placeholder="密码（至少6位）">
+            <div id="auth-extra-fields" style="display:none;">
+                <input type="text" id="auth-name" placeholder="真实姓名 *" required>
+                <input type="text" id="auth-employee-id" placeholder="工号 *" required>
+                <input type="text" id="auth-department" placeholder="单位部门 *" required>
+                <input type="tel" id="auth-phone" placeholder="联系电话 *" required>
+            </div>
+            <button type="button" class="btn btn-primary" onclick="handleAuth()" id="auth-submit-btn">登 录</button>
+            <p style="text-align:center;margin-top:10px;font-size:13px;color:var(--text-light);">
+                <span id="auth-toggle-text">没有账号？</span>
+                <span onclick="toggleAuthMode()" style="color:var(--primary);font-weight:600;cursor:pointer;text-decoration:underline;" id="auth-toggle-link">立即注册</span>
+            </p>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="modal-supplement">
+        <div class="modal">
+            <button type="button" class="modal-close" onclick="closeSupplementModal()">✕</button>
+            <h3>📤 补充知识库</h3>
+            <p style="font-size:13px;color:var(--text-light);margin-bottom:12px;">请提供您的信息和补充文档（PDF/DOCX/TXT/MD 可被 AI 解析；PPT/XLS 仅存储）</p>
+            <input type="text" id="sup-name" placeholder="您的姓名 *" required>
+            <input type="tel" id="sup-phone" placeholder="联系电话 *" required>
+            <input type="text" id="sup-equipment" placeholder="装备名称 *" required>
+            <label class="upload-zone" style="margin-top:8px;display:block;">
+                <div>📎 点击上传文档</div>
+                <div style="font-size:12px;color:var(--text-light);margin-top:4px;">支持 PDF/DOCX/TXT/MD/PPT/XLS，单个文件最大 50MB</div>
+                <input type="file" accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt,.md" id="sup-file-input" onchange="handleSupFileSelect(this)">
+            </label>
+            <div id="sup-file-name" style="font-size:12px;color:var(--success);margin-top:4px;"></div>
+            <button type="button" class="btn btn-primary" onclick="submitSupplement()" id="btn-sup-submit" style="margin-top:12px;">提交补充文档</button>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="modal-kb-meta">
+        <div class="modal">
+            <button type="button" class="modal-close" onclick="closeKBMetaModal()">✕</button>
+            <h3>📋 补全知识库文档信息</h3>
+            <p style="font-size:13px;color:var(--text-light);margin-bottom:12px;">请确认并补全以下关联信息，确保文档与装备准确绑定</p>
+            <input type="text" id="kb-meta-equipment" placeholder="装备名称 *" required>
+            <input type="text" id="kb-meta-uploader-name" placeholder="上传人姓名 *" required>
+            <input type="text" id="kb-meta-uploader-phone" placeholder="上传人电话 *" required>
+            <input type="text" id="kb-meta-maintainer-name" placeholder="装备维护人姓名 *" required>
+            <input type="text" id="kb-meta-maintainer-phone" placeholder="装备维护人电话 *" required>
+            <button type="button" class="btn btn-primary" onclick="confirmKBMeta()" id="btn-kb-meta-confirm">确认并上传</button>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="modal-kb-edit">
+        <div class="modal">
+            <button type="button" class="modal-close" onclick="closeKBEditModal()">✕</button>
+            <h3>✏️ 编辑知识库文档</h3>
+            <p style="font-size:13px;color:var(--text-light);margin-bottom:12px;">修改文档关联信息，归属装备相同的文档将自动归类</p>
+            <input type="hidden" id="kb-edit-id">
+            <input type="text" id="kb-edit-title" placeholder="文档名称">
+            <input type="text" id="kb-edit-equipment" placeholder="归属装备 *">
+            <input type="text" id="kb-edit-maintainer-name" placeholder="维护人姓名">
+            <input type="text" id="kb-edit-maintainer-phone" placeholder="维护人电话">
+            <button type="button" class="btn btn-primary" onclick="saveKBEdit()" id="btn-kb-edit-save">保存修改</button>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="modal-equipment">
+        <div class="modal">
+            <button type="button" class="modal-close" onclick="closeEquipmentModal()">✕</button>
+            <h3 id="equipment-modal-title">➕ 新增装备</h3>
+            <input type="hidden" id="equipment-id">
+            <input type="text" id="equipment-name" placeholder="装备名称 *" required>
+            <label class="upload-zone" style="margin-top:8px;display:block;padding:16px;">
+                <div>📷 点击上传装备图片</div>
+                <div style="font-size:12px;color:var(--text-light);margin-top:4px;">支持 JPG/PNG，建议比例 16:9</div>
+                <input type="file" accept="image/*" id="equipment-image-input" onchange="handleEquipmentImageSelect(this)">
+            </label>
+            <div id="equipment-image-preview" style="font-size:12px;color:var(--success);margin-top:4px;"></div>
+            <input type="hidden" id="equipment-image-url">
+            <input type="number" id="equipment-quantity" placeholder="装备数量" min="1" value="1">
+            <input type="text" id="equipment-asset" placeholder="资产编号/车牌号">
+            <input type="text" id="equipment-maintainer-name" placeholder="装备维护人姓名 *" required>
+            <input type="text" id="equipment-maintainer-phone" placeholder="装备维护人电话 *" required>
+            <textarea id="equipment-guarantee-records" placeholder="重大保障记录（可选）" rows="3" style="width:100%;padding:10px 14px;border:2px solid var(--border);border-radius:10px;font-size:14px;margin-top:10px;outline:none;font-family:inherit;resize:vertical;"></textarea>
+            <button type="button" class="btn btn-primary" onclick="saveEquipment()" id="btn-equipment-save">保存</button>
+        </div>
+    </div>
+
+    <div class="toast" id="toast"></div>
+
+    <script>
+        // ==================== 配置区 ====================
+        const SUPABASE_URL = 'https://qmnecrrnoqdffkpedlth.supabase.co';
+        const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFtbmVjcnJub3FkZmZrcGVkbHRoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg1ODQ5MDEsImV4cCI6MjA5NDE2MDkwMX0.gNBTqrmZEUdoOzbNUvvLgtBwcur7SqliZiXlLr1vRrg';
+
+        const LLM_BASE_URL = 'https://qmnecrrnoqdffkpedlth.supabase.co/functions/v1/llm-proxy';
+        const LLM_MODEL    = 'deepseek-v4-pro';
+
+        // ==================== PDF / Word 解析库初始化 ====================
+        if (typeof pdfjsLib !== 'undefined') {
+            pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+        }
+
+        // ==================== 文档解析函数 ====================
+        async function extractPDFText(file) {
+            try {
+                const arrayBuffer = await file.arrayBuffer();
+                const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+                let fullText = '';
+                for (let i = 1; i <= pdf.numPages; i++) {
+                    const page = await pdf.getPage(i);
+                    const textContent = await page.getTextContent();
+                    const pageText = textContent.items.map(item => item.str).join(' ');
+                    fullText += pageText + '\n';
+                }
+                fullText = fullText.replace(/\s+/g, ' ').replace(/\n\s*\n/g, '\n').trim();
+                let cleaned = fullText;
+                let prev;
+                do {
+                    prev = cleaned;
+                    cleaned = cleaned.replace(/([\u4e00-\u9fa5])\s+([\u4e00-\u9fa5])/g, '$1$2');
+                } while (cleaned !== prev);
+                fullText = cleaned;
+                return { success: true, text: fullText, pages: pdf.numPages };
+            } catch (err) {
+                console.error('PDF 解析失败:', err);
+                return { success: false, text: '', error: err.message };
+            }
+        }
+
+        async function extractDOCXText(file) {
+            try {
+                const arrayBuffer = await file.arrayBuffer();
+                const result = await mammoth.extractRawText({ arrayBuffer });
+                return { success: true, text: result.value, warnings: result.messages };
+            } catch (err) {
+                console.error('DOCX 解析失败:', err);
+                return { success: false, text: '', error: err.message };
+            }
+        }
+
+        async function extractTextFile(file) {
+            try {
+                const text = await file.text();
+                return { success: true, text };
+            } catch (err) {
+                return { success: false, text: '', error: err.message };
+            }
+        }
+
+        async function parseDocument(file) {
+            const name = file.name.toLowerCase();
+            if (name.endsWith('.pdf')) {
+                return await extractPDFText(file);
+            } else if (name.endsWith('.docx')) {
+                return await extractDOCXText(file);
+            } else if (name.endsWith('.txt') || name.endsWith('.md')) {
+                return await extractTextFile(file);
+            } else if (name.endsWith('.ppt') || name.endsWith('.pptx') || name.endsWith('.xls') || name.endsWith('.xlsx')) {
+                return { success: false, text: '', error: 'PPT/Excel 格式暂不支持文本提取，将仅作为文件存储' };
+            } else {
+                return { success: false, text: '', error: '不支持的解析格式（仅 PDF/DOCX/TXT/MD 可被 AI 理解）' };
+            }
+        }
+
+
+        // ==================== V29 分页组件 ====================
+        const PAGE_SIZE = 20;
+
+        function renderPagination(containerId, totalItems, currentPage, onPageChange) {
+            const container = document.getElementById(containerId);
+            if (!container) return;
+            const totalPages = Math.ceil(totalItems / PAGE_SIZE);
+            if (totalPages <= 1) { container.innerHTML = ''; return; }
+
+            let html = `<button class="pagination-btn" onclick="${onPageChange}(${currentPage - 1})" ${currentPage <= 1 ? 'disabled' : ''}>上一页</button>`;
+
+            // 显示页码：最多显示5个页码
+            let startPage = Math.max(1, currentPage - 2);
+            let endPage = Math.min(totalPages, startPage + 4);
+            if (endPage - startPage < 4) startPage = Math.max(1, endPage - 4);
+
+            if (startPage > 1) {
+                html += `<button class="pagination-btn" onclick="${onPageChange}(1)">1</button>`;
+                if (startPage > 2) html += `<span class="pagination-info">...</span>`;
+            }
+            for (let i = startPage; i <= endPage; i++) {
+                html += `<button class="pagination-btn ${i === currentPage ? 'active' : ''}" onclick="${onPageChange}(${i})">${i}</button>`;
+            }
+            if (endPage < totalPages) {
+                if (endPage < totalPages - 1) html += `<span class="pagination-info">...</span>`;
+                html += `<button class="pagination-btn" onclick="${onPageChange}(${totalPages})">${totalPages}</button>`;
+            }
+
+            html += `<button class="pagination-btn" onclick="${onPageChange}(${currentPage + 1})" ${currentPage >= totalPages ? 'disabled' : ''}>下一页</button>`;
+            html += `<span class="pagination-info">共 ${totalItems} 条 · 第 ${currentPage}/${totalPages} 页</span>`;
+            container.innerHTML = html;
+        }
+
+        // ==================== 全局状态 ====================
+        let supabaseClient = null;
+        let currentUser = null;
+        let currentPanel = 'chat';
+        let pendingSupplement = null;
+        let pendingKBUpload = null;
+        let speechRecognition = null;
+        let isRecording = false;
+        let uploadedFiles = [];
+        let isAuthRegisterMode = false;
+        const MAX_FILE_SIZE = 50 * 1024 * 1024;
+
+        // ==================== 初始化 ====================
+        async function init() {
+            console.log('init() 开始执行');
+            try {
+                let supabaseModule = null;
+                if (window.supabase && window.supabase.createClient) {
+                    supabaseModule = window.supabase;
+                } else if (typeof supabase !== 'undefined' && supabase.createClient) {
+                    supabaseModule = supabase;
+                } else if (window.supabaseJs && window.supabaseJs.createClient) {
+                    supabaseModule = window.supabaseJs;
+                }
+
+                if (!supabaseModule) {
+                    console.error('❌ Supabase JS库未加载，window.supabase=', window.supabase, 'typeof supabase=', typeof supabase);
+                    showToast('Supabase JS库加载失败，请检查网络连接');
+                    return;
+                }
+
+                console.log('🔌 正在连接 Supabase...');
+                supabaseClient = supabaseModule.createClient(SUPABASE_URL, SUPABASE_KEY);
+                console.log('✅ SupabaseClient 创建成功');
+
+                // 测试连接：尝试获取 session
+                const { data: { session } } = await supabaseClient.auth.getSession();
+                console.log('✅ Supabase 连接测试通过, session=', session ? '存在' : '无');
+            } catch (e) {
+                console.error('❌ SupabaseClient 初始化失败:', e);
+                showToast('SupabaseClient 配置错误：' + e.message + '，请检查 SUPABASE_URL 和 SUPABASE_KEY 是否正确');
+                return;
+            }
+
+            // V28 关键修复：先用 getSession() 获取本地持久化 session，避免刷新后退出
+            try {
+                const { data: { session } } = await supabaseClient.auth.getSession();
+                if (session && session.user) {
+                    console.log('🔄 检测到本地 session，尝试恢复登录...');
+                    const { data: profile, error } = await supabaseClient.from('profiles').select('*').eq('id', session.user.id).single();
+                    if (error) throw error;
+                    if (profile && profile.status === 'approved') {
+                        currentUser = { ...session.user, ...profile };
+                        document.getElementById('modal-auth').classList.remove('active');
+                        showMainUI();
+                        console.log('✅ 登录状态已恢复，用户:', profile.name);
+                        return;
+                    } else if (profile && profile.status === 'pending') {
+                        showToast('您的账号正在审核中，请等待管理员审核。');
+                        await supabaseClient.auth.signOut();
+                    } else {
+                        await supabaseClient.auth.signOut();
+                    }
+                }
+            } catch (err) {
+                console.error('初始化恢复登录失败:', err);
+            }
+
+            document.getElementById('input-area').style.display = 'none';
+            showAuthModal();
+
+            // 如果 supabaseClient 初始化失败，在登录弹窗显示警告
+            if (!supabaseClient) {
+                console.error('❌ 系统初始化失败，登录功能不可用');
+                const authModal = document.getElementById('modal-auth');
+                if (authModal) {
+                    authModal.innerHTML = `
+                        <div class="modal" style="text-align:center;">
+                            <h3 style="color:var(--danger);">⚠️ 系统初始化失败</h3>
+                            <p style="font-size:14px;color:var(--text-light);margin:16px 0;">
+                                Supabase 连接失败，请检查：<br>
+                                1. 网络连接是否正常<br>
+                                2. SUPABASE_URL 和 SUPABASE_KEY 是否正确<br>
+                                3. 浏览器控制台是否有报错信息
+                            </p>
+                            <button type="button" class="btn btn-primary" onclick="location.reload()">🔄 刷新页面重试</button>
+                        </div>
+                    `;
+                }
+                return;
+            }
+        }
+        // 预加载回答守则
+        loadAnswerRules();
+
+        // ==================== 认证 ====================
+        function showAuthModal() {
+            isAuthRegisterMode = false;
+            document.getElementById('modal-auth').classList.add('active');
+            document.getElementById('auth-title').textContent = '🔐 登录';
+            document.getElementById('auth-extra-fields').style.display = 'none';
+            document.getElementById('auth-submit-btn').textContent = '登 录';
+            document.getElementById('auth-toggle-text').textContent = '没有账号？';
+            document.getElementById('auth-toggle-link').textContent = '立即注册';
+            document.getElementById('auth-email').value = '';
+            document.getElementById('auth-password').value = '';
+        }
+        function toggleAuthMode() {
+            try {
+            console.log('🔄 toggleAuthMode 被调用, 当前模式:', isAuthRegisterMode ? '注册' : '登录');
+            isAuthRegisterMode = !isAuthRegisterMode;
+            if (isAuthRegisterMode) {
+                document.getElementById('auth-title').textContent = '📝 注册新账号';
+                document.getElementById('auth-extra-fields').style.display = 'block';
+                document.getElementById('auth-submit-btn').textContent = '提交注册申请';
+                document.getElementById('auth-toggle-text').textContent = '已有账号？';
+                document.getElementById('auth-toggle-link').textContent = '立即登录';
+            } else {
+                document.getElementById('auth-title').textContent = '🔐 登录';
+                document.getElementById('auth-extra-fields').style.display = 'none';
+                document.getElementById('auth-submit-btn').textContent = '登 录';
+                document.getElementById('auth-toggle-text').textContent = '没有账号？';
+                document.getElementById('auth-toggle-link').textContent = '立即注册';
+            }
+            } catch (e) {
+                console.error('toggleAuthMode 错误:', e);
+                showToast('切换模式失败，请刷新页面重试');
+            }
+        }
+        async function handleAuth() {
+            console.log('🔐 handleAuth 被调用, isAuthRegisterMode=', isAuthRegisterMode);
+
+            // V30 全局防护：确保任何异常都能被捕获并反馈给用户
+            try {
+                // 关键检查1: supabaseClient 是否初始化成功
+                if (!supabaseClient) {
+                    console.error('❌ supabaseClient 未初始化');
+                    showToast('系统初始化失败，请刷新页面重试');
+                    return;
+                }
+                // 关键检查2: supabaseClient.auth 是否存在
+                if (!supabaseClient.auth || typeof supabaseClient.auth.signInWithPassword !== 'function') {
+                    console.error('❌ supabaseClient.auth 模块未加载');
+                    showToast('认证模块加载失败，请检查网络后刷新页面');
+                    return;
+                }
+
+                const email = document.getElementById('auth-email').value.trim();
+                const password = document.getElementById('auth-password').value.trim();
+                if (!email || !password) { showToast('请填写账号和密码'); return; }
+                if (password.length < 6) { showToast('密码至少6位'); return; }
+
+                const btn = document.getElementById('auth-submit-btn');
+                if (!btn) { showToast('界面元素加载异常，请刷新页面'); return; }
+                btn.disabled = true;
+                btn.innerHTML = '<span class="spinner"></span> 处理中...';
+
+            // 超时保护：10秒后自动恢复按钮
+            const timeoutId = setTimeout(() => {
+                console.warn('⏱️ 操作超时（10秒）');
+                showToast('操作超时，请检查网络连接或稍后重试');
+                btn.disabled = false;
+                btn.textContent = isAuthRegisterMode ? '提交注册申请' : '登 录';
+            }, 10000);
+
+            try {
+                if (isAuthRegisterMode) {
+                    // ===== 注册流程 =====
+                    const name = document.getElementById('auth-name').value.trim();
+                    const employeeId = document.getElementById('auth-employee-id').value.trim();
+                    const department = document.getElementById('auth-department').value.trim();
+                    const phone = document.getElementById('auth-phone').value.trim();
+                    if (!name || !employeeId || !department || !phone) {
+                        clearTimeout(timeoutId);
+                        showToast('请填写姓名、工号、单位部门和电话');
+                        btn.disabled = false;
+                        btn.textContent = '提交注册申请';
+                        return;
+                    }
+
+                    // 检查手机号是否已注册（RPC函数可能不存在，降级处理）
+                    let phoneExists = false;
+                    try {
+                        const { data: phoneCheckResult, error: phoneCheckError } = await supabaseClient
+                            .rpc('check_phone_exists', { phone_number: phone });
+                        if (phoneCheckError) {
+                            console.warn('⚠️ check_phone_exists RPC 失败:', phoneCheckError.message);
+                        } else {
+                            phoneExists = phoneCheckResult;
+                        }
+                    } catch (rpcErr) {
+                        console.warn('⚠️ check_phone_exists 异常:', rpcErr.message);
+                    }
+
+                    if (phoneExists) {
+                        clearTimeout(timeoutId);
+                        throw new Error('该手机号已被注册，请直接登录或使用其他手机号。');
+                    }
+
+                    console.log('📧 开始注册:', email);
+                    const { data: signUpData, error: signUpError } = await supabaseClient.auth.signUp({
+                        email, password,
+                        options: { data: { name, phone } }
+                    });
+                    if (signUpError) throw signUpError;
+
+                    console.log('✅ 注册成功, userId:', signUpData.user?.id);
+
+                    if (signUpData.user) {
+                        console.log('📝 创建 profile...');
+                        const { error: profileError } = await supabaseClient.from('profiles').upsert({
+                            id: signUpData.user.id, email, name, phone, 
+                            employee_id: document.getElementById('auth-employee-id').value.trim(),
+                            department: document.getElementById('auth-department').value.trim(),
+                            role: 'user', status: 'pending'
+                        });
+                        if (profileError) {
+                            console.warn('⚠️ 创建 profile 失败:', profileError.message);
+                            showToast('注册信息保存失败：' + profileError.message);
+                        } else {
+                            console.log('✅ profile 创建成功');
+                        }
+                    }
+                    clearTimeout(timeoutId);
+                    showToast('注册申请已提交！请等待管理员审核。');
+                    toggleAuthMode();
+
+                } else {
+                    // ===== 登录流程 =====
+                    let loginEmail = email;
+
+                    // 如果输入的是手机号（不含@），尝试通过RPC获取对应邮箱
+                    if (!email.includes('@')) {
+                        console.log('📱 手机号登录模式:', email);
+                        let foundEmail = null;
+                        let rpcFailed = false;
+
+                        try {
+                            const { data: rpcResult, error: rpcError } = await supabaseClient
+                                .rpc('get_email_by_phone', { phone_number: email });
+
+                            if (rpcError) {
+                                console.warn('⚠️ get_email_by_phone RPC 失败:', rpcError.message);
+                                rpcFailed = true;
+                            } else {
+                                foundEmail = rpcResult;
+                                console.log('📧 RPC 返回邮箱:', foundEmail);
+                            }
+                        } catch (rpcErr) {
+                            console.warn('⚠️ get_email_by_phone 异常:', rpcErr.message);
+                            rpcFailed = true;
+                        }
+
+                        if (rpcFailed) {
+                            clearTimeout(timeoutId);
+                            showToast('手机号登录服务暂不可用，请使用邮箱登录');
+                            btn.disabled = false;
+                            btn.textContent = '登 录';
+                            return;
+                        }
+
+                        if (!foundEmail) {
+                            clearTimeout(timeoutId);
+                            throw new Error('该手机号未绑定任何账号，请使用邮箱登录或确认手机号是否正确。');
+                        }
+                        loginEmail = foundEmail;
+                    }
+
+                    console.log('🔑 开始登录:', loginEmail);
+                    const { data, error } = await supabaseClient.auth.signInWithPassword({ 
+                        email: loginEmail, 
+                        password 
+                    });
+                    if (error) {
+                        console.error('❌ 登录失败:', error.message);
+                        if (error.message === 'Email not confirmed' || error.message.includes('Email not confirmed')) {
+                            throw new Error('该账号邮箱尚未确认，无法登录。请管理员在 Supabase Dashboard → Authentication → Email 中关闭「Confirm email」选项。');
+                        }
+                        throw error;
+                    }
+
+                    console.log('✅ 登录成功, userId:', data.user?.id);
+
+                    console.log('👤 查询用户资料...');
+                    const { data: profile, error: profileError } = await supabaseClient
+                        .from('profiles')
+                        .select('*')
+                        .eq('id', data.user.id)
+                        .single();
+
+                    if (profileError) {
+                        console.error('❌ 查询 profile 失败:', profileError.message);
+                        await supabaseClient.auth.signOut();
+                        clearTimeout(timeoutId);
+                        throw new Error('账号资料查询失败：' + profileError.message + '，请联系管理员。');
+                    }
+
+                    if (!profile) {
+                        await supabaseClient.auth.signOut();
+                        clearTimeout(timeoutId);
+                        throw new Error('账号资料不存在，请联系管理员。');
+                    }
+
+                    if (profile.status !== 'approved') {
+                        await supabaseClient.auth.signOut();
+                        clearTimeout(timeoutId);
+                        if (profile.status === 'disabled') {
+                            throw new Error('该账号已被禁用，请联系管理员。');
+                        }
+                        throw new Error('账号未审核或已被拒绝，无法登录。');
+                    }
+
+                    console.log('✅ 登录流程完成, 用户:', profile.name, '角色:', profile.role);
+                    clearTimeout(timeoutId);
+                    currentUser = { ...data.user, ...profile };
+                    document.getElementById('modal-auth').classList.remove('active');
+                    showMainUI();
+                }
+            } catch (err) {
+                clearTimeout(timeoutId);
+                console.error('❌ handleAuth 错误:', err);
+                const errorMsg = err && err.message ? err.message : (err && err.error_description ? err.error_description : '操作失败，请检查网络连接或联系管理员');
+                showToast(errorMsg);
+            } finally {
+                // V30 确保按钮状态一定恢复
+                const btnFinally = document.getElementById('auth-submit-btn');
+                if (btnFinally) {
+                    btnFinally.disabled = false;
+                    btnFinally.textContent = isAuthRegisterMode ? '提交注册申请' : '登 录';
+                }
+            }
+            } catch (outerErr) {
+                // V30 最外层防护，捕获 handleAuth 本身可能抛出的同步错误
+                console.error('❌ handleAuth 外层错误:', outerErr);
+                showToast('系统错误：' + (outerErr && outerErr.message ? outerErr.message : '未知错误，请刷新页面重试'));
+                const btnOuter = document.getElementById('auth-submit-btn');
+                if (btnOuter) {
+                    btnOuter.disabled = false;
+                    btnOuter.textContent = isAuthRegisterMode ? '提交注册申请' : '登 录';
+                }
+            }
+        }
+        async function logout() {
+            if (!confirm('确定退出登录？')) return;
+            try { await supabaseClient.auth.signOut(); } catch(e){}
+            currentUser = null; uploadedFiles = [];
+            document.getElementById('sidebar').style.display = 'none';
+            document.getElementById('main-area').style.display = 'none';
+            hideAllPanels();
+            document.getElementById('panel-chat').classList.add('active');
+            currentPanel = 'chat'; updateNavActive();
+            document.getElementById('current-username').textContent = '未登录';
+            document.getElementById('current-role').textContent = '';
+            document.getElementById('user-avatar-display').textContent = '👤';
+            document.getElementById('kb-status').textContent = '知识库';
+            document.getElementById('chat-messages').innerHTML = `
+                <div class="message bot">
+                    <div class="msg-avatar">🤖</div>
+                    <div><div class="msg-bubble">您好！我是 AI 设备操作维护助手。<br>我已接入大语言模型，可以<strong>理解 PDF、Word、文本文档</strong>后为您智能作答。<br>请先登录，然后直接提问。</div></div>
+                </div>`;
+            document.getElementById('input-area').style.display = 'none';
+            showAuthModal();
+
+            // 如果 supabaseClient 初始化失败，在登录弹窗显示警告
+            if (!supabaseClient) {
+                console.error('❌ 系统初始化失败，登录功能不可用');
+                const authModal = document.getElementById('modal-auth');
+                if (authModal) {
+                    authModal.innerHTML = `
+                        <div class="modal" style="text-align:center;">
+                            <h3 style="color:var(--danger);">⚠️ 系统初始化失败</h3>
+                            <p style="font-size:14px;color:var(--text-light);margin:16px 0;">
+                                Supabase 连接失败，请检查：<br>
+                                1. 网络连接是否正常<br>
+                                2. SUPABASE_URL 和 SUPABASE_KEY 是否正确<br>
+                                3. 浏览器控制台是否有报错信息
+                            </p>
+                            <button type="button" class="btn btn-primary" onclick="location.reload()">🔄 刷新页面重试</button>
+                        </div>
+                    `;
+                }
+                return;
+            }
+        }
+        // 预加载回答守则
+        loadAnswerRules();
+
+        // ==================== 界面 ====================
+        async function showMainUI() {
+            document.getElementById('sidebar').style.display = 'flex';
+            document.getElementById('main-area').style.display = 'flex';
+            const displayName = currentUser.name || currentUser.phone || currentUser.email;
+            document.getElementById('current-username').textContent = displayName;
+            const avatarName = currentUser.name ? getNameSuffix(currentUser.name) : (displayName || '👤').charAt(0).toUpperCase();
+            document.getElementById('user-avatar-display').textContent = avatarName;
+            // V22 修改：一般用户 -> 用户
+            const roleLabel = currentUser.role === 'admin' ? '管理员' : '用户';
+            document.getElementById('current-role').textContent = roleLabel;
+            const isAdmin = currentUser.role === 'admin';
+            document.getElementById('btn-add-equipment').style.display = isAdmin ? 'flex' : 'none';
+            document.getElementById('nav-kb-admin').style.display = 'flex';
+            document.getElementById('nav-kb-text').textContent = isAdmin ? '知识库管理' : '知识库补充';
+            document.getElementById('nav-answer-rules').style.display = isAdmin ? 'flex' : 'none';
+            document.getElementById('nav-user-admin').style.display = isAdmin ? 'flex' : 'none';
+            document.getElementById('nav-pending-equipment').style.display = isAdmin ? 'flex' : 'none';
+            document.getElementById('nav-pending-docs').style.display = isAdmin ? 'flex' : 'none';
+            // V22 修改：所有用户都能看到使用统计
+            document.getElementById('nav-usage-stats').style.display = 'flex';
+            if (isAdmin) { updateAdminBadges(); loadKnowledgeBaseTable(); loadUserTable(); loadPendingDocsTable(); }
+            await loadEquipmentInfoTable();
+            hideAllPanels();
+            document.getElementById('panel-chat').classList.add('active');
+            currentPanel = 'chat'; updateNavActive();
+            document.getElementById('panel-title').textContent = '💬 智能问答';
+            document.getElementById('input-area').style.display = 'block';
+            updateKBStatus();
+        }
+        function hideAllPanels() { document.querySelectorAll('.panel').forEach(p => p.classList.remove('active')); }
+        function updateNavActive() { document.querySelectorAll('.nav-item').forEach(item => item.classList.toggle('active', item.dataset.panel === currentPanel)); }
+        async function switchPanel(panelId) {
+            if (!currentUser) { showToast('请先登录'); showAuthModal(); return; }
+            hideAllPanels();
+            const panel = document.getElementById('panel-' + panelId);
+            if (panel) { panel.classList.add('active'); currentPanel = panelId; updateNavActive();
+                const isAdmin = currentUser.role === 'admin';
+                if (panelId === 'kb-admin') {
+                    document.getElementById('kb-list-section').style.display = isAdmin ? 'block' : 'none';
+                    document.getElementById('kb-panel-header').textContent = isAdmin ? '📚 知识库文档管理' : '📚 知识库补充';
+                    document.getElementById('kb-panel-desc').innerHTML = isAdmin 
+                        ? '💡 <strong>AI 解析说明：</strong>PDF、TXT、MD、DOCX 上传后会自动提取文本供 AI 理解；PPT/XLS/旧版DOC 仅保存文件，建议另存为 PDF 或复制内容到 TXT 上传。' 
+                        : '<div style="text-align:center; padding: 20px 0; font-size: 16px; font-weight: 600; color: var(--primary);">感谢您对知识库的补充！</div>';
+                    if (isAdmin) await loadKnowledgeBaseTable();
+                }
+                if (panelId === 'user-admin') await loadUserTable();
+                if (panelId === 'pending-equipment') await loadPendingEquipmentTable();
+                if (panelId === 'pending-docs') await loadPendingDocsTable();
+                if (panelId === 'usage-stats') await loadUsageStats();
+                if (panelId === 'equipment-info') await loadEquipmentInfoTable();
+                if (panelId === 'notifications') await loadNotificationsPanel();
+                if (panelId === 'answer-rules') await loadAnswerRulesPanel();
+                const titles = { 'chat':'💬 智能问答', 'kb-admin':'📚 知识库管理', 'answer-rules':'📋 回答守则', 'user-admin':'👥 用户审核', 'pending-equipment':'⚖️ 装备变更审核', 'pending-docs':'📝 文档审核', 'usage-stats':'📊 使用统计', 'equipment-info':'📡 装备信息管理', 'notifications':'🔔 通知与反馈' };
+                document.getElementById('panel-title').textContent = titles[panelId] || '';
+            }
+            if (window.innerWidth <= 768) { document.getElementById('sidebar').classList.remove('open'); document.getElementById('sidebar-overlay').classList.remove('active'); }
+        }
+        function toggleMobileSidebar() { document.getElementById('sidebar').classList.toggle('open'); document.getElementById('sidebar-overlay').classList.toggle('active'); }
+        async function updateKBStatus() {
+            try { const { count } = await supabaseClient.from('knowledge_base').select('*', { count: 'exact', head: true }).eq('status', 'active'); document.getElementById('kb-status').textContent = `知识库就绪 (${count || 0}份文档)`; }
+            catch(e) { document.getElementById('kb-status').textContent = '知识库连接异常'; }
+        }
+
+        // ==================== 文件上传 ====================
+        function handleFileUpload(input, type) {
+            const files = input.files;
+            if (!files.length) return;
+
+            // V22 新增：上传文档时自动弹出补充知识库窗口
+            if (type === 'document') {
+                const file = files[0];
+                if (file.size > MAX_FILE_SIZE) {
+                    showToast(`文件 ${file.name} 超过50MB限制`);
+                    input.value = '';
+                    return;
+                }
+                // 自动打开补充知识库弹窗
+                openSupplementModal();
+                // 预填文件到补充知识库
+                pendingSupplement = { file };
+                document.getElementById('sup-file-name').textContent = '✅ ' + file.name;
+                // 从文件名推断装备名称
+                const suggestedName = file.name.replace(/\.[^.]+$/, '').replace(/[_\-\s]+/g, ' ').substring(0, 50);
+                if (!document.getElementById('sup-equipment').value) {
+                    document.getElementById('sup-equipment').value = suggestedName;
+                }
+                input.value = '';
+                return;
+            }
+
+            for (let f of files) {
+                if (f.size > MAX_FILE_SIZE) { showToast(`文件 ${f.name} 超过50MB限制，已跳过`); continue; }
+                uploadedFiles.push({ file: f, type, name: f.name, size: f.size });
+            }
+            renderFilePreview(); input.value = '';
+        }
+
+        async function extractDocumentText(file) {
+            const parseResult = await parseDocument(file);
+            if (parseResult.success) {
+                return parseResult.text.substring(0, 35000);
+            }
+            return `[文档 ${file.name} 解析失败: ${parseResult.error}]`;
+        }
+        function renderFilePreview() {
+            document.getElementById('file-preview').innerHTML = uploadedFiles.map((f, i) => {
+                const icon = f.type==='image'?'🖼️':f.type==='video'?'🎬':'📎';
+                return `<span class="file-chip">${icon} ${f.name} (${formatSize(f.size)})<span class="remove-file" onclick="removeFile(${i})">×</span></span>`;
+            }).join('');
+        }
+        function removeFile(i) { uploadedFiles.splice(i, 1); renderFilePreview(); }
+        function formatSize(b) { if (b < 1024) return b + 'B'; if (b < 1048576) return (b/1024).toFixed(1) + 'KB'; return (b/1048576).toFixed(1) + 'MB'; }
+
+        // ==================== 语音 ====================
+        function toggleVoice() {
+            if (isRecording) { stopVoice(); return; }
+            if (!('webkitSpeechRecognition' in window || 'SpeechRecognition' in window)) { 
+                showToast('您的浏览器不支持原声语音识别，请使用 Chrome 或 Edge 浏览器'); 
+                return; 
+            }
+            
+            const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+            speechRecognition = new SR();
+            speechRecognition.lang = 'zh-CN'; 
+            speechRecognition.continuous = true; 
+            speechRecognition.interimResults = true; // 开启中间结果，用户体验更好
+            
+            speechRecognition.onstart = () => { 
+                isRecording = true; 
+                document.getElementById('btn-voice').classList.add('recording'); 
+                document.getElementById('voice-status').textContent = '🔴 正在聆听...（请说话，停顿5秒自动结束）'; 
+                console.log('语音识别已启动（持续监听模式，5秒停顿检测）');
+                // 启动停顿检测定时器
+                if (window.silenceTimer) clearTimeout(window.silenceTimer);
+                window.silenceTimer = setTimeout(() => {
+                    if (isRecording) {
+                        console.log('⏱️ 检测到5秒停顿，自动停止语音识别');
+                        stopVoice();
+                    }
+                }, 5000);
+            };
+            
+            speechRecognition.onresult = (e) => { 
+                const transcript = Array.from(e.results)
+                    .map(result => result[0].transcript)
+                    .join('');
+                document.getElementById('text-input').value = transcript;
+                console.log('识别结果:', transcript);
+                // 重置停顿检测定时器
+                if (window.silenceTimer) clearTimeout(window.silenceTimer);
+                window.silenceTimer = setTimeout(() => {
+                    if (isRecording) {
+                        console.log('⏱️ 检测到5秒停顿，自动停止语音识别');
+                        stopVoice();
+                    }
+                }, 5000);
+            };
+            
+            speechRecognition.onerror = (e) => { 
+                console.error('语音识别错误:', e.error);
+                let msg = '语音识别错误: ' + e.error;
+                if (e.error === 'no-speech') msg = '未检测到语音，请再试一次';
+                if (e.error === 'audio-capture') msg = '无法访问麦克风，请检查硬件';
+                if (e.error === 'not-allowed') msg = '麦克风权限被拒绝，请在浏览器设置中开启';
+                if (e.error === 'network') msg = '网络连接不稳定，语音识别需要联网';
+                
+                document.getElementById('voice-status').textContent = '⚠️ ' + msg; 
+                setTimeout(stopVoice, 3000); 
+            };
+            
+            speechRecognition.onend = () => { 
+                console.log('语音识别已结束');
+                if (isRecording) stopVoice(); 
+            };
+            
+            try { 
+                speechRecognition.start(); 
+            } catch(e) { 
+                console.error('语音启动异常:', e);
+                showToast('语音启动失败，请刷新页面重试'); 
+            }
+        }
+        function stopVoice() { 
+            isRecording = false; 
+            document.getElementById('btn-voice').classList.remove('recording'); 
+            document.getElementById('voice-status').textContent = ''; 
+            // 清除停顿检测定时器
+            if (window.silenceTimer) { clearTimeout(window.silenceTimer); window.silenceTimer = null; }
+            if (speechRecognition) { try { speechRecognition.stop(); } catch(e){} speechRecognition = null; } 
+        }
+
+        // ==================== 聊天消息 ====================
+        async function sendMessage() {
+            const text = document.getElementById('text-input').value.trim();
+            if (!text && !uploadedFiles.length) return;
+            if (!currentUser) { showToast('请先登录'); return; }
+
+            const btn = document.getElementById('btn-send');
+            btn.disabled = true; 
+            btn.innerHTML = '<span class="spinner"></span>';
+
+            try {
+                let display = text || '请分析以下文件';
+                let extracted = '';
+                let mediaPreviews = '';
+
+                for (const f of uploadedFiles) {
+                    if (f.type === 'image' || f.type === 'video') {
+                        // 真实上传多媒体文件
+                        const ext = f.name.split('.').pop();
+                        const safeName = `${f.type}_${Date.now()}_${Math.random().toString(36).substring(2, 8)}.${ext}`;
+                        const filePath = `chat_media/${safeName}`;
+                        
+                        const { error: upErr } = await supabaseClient.storage.from('documents').upload(filePath, f.file);
+                        if (upErr) throw upErr;
+                        
+                        const { data: urlData } = supabaseClient.storage.from('documents').getPublicUrl(filePath);
+                        const publicUrl = urlData.publicUrl;
+                        
+                        if (f.type === 'image') {
+                            extracted += `\n[图片链接]: ${publicUrl}\n`;
+                            mediaPreviews += `<br><img src="${publicUrl}" style="max-width:200px; border-radius:8px; margin-top:8px; cursor:pointer;" onclick="window.open('${publicUrl}')">`;
+                        } else {
+                            extracted += `\n[视频链接]: ${publicUrl}\n`;
+                            mediaPreviews += `<br><video src="${publicUrl}" controls style="max-width:200px; border-radius:8px; margin-top:8px;"></video>`;
+                        }
+                    } else if (f.type === 'document') {
+                        const docText = await extractDocumentText(f.file);
+                        extracted += `\n\n[文档 ${f.name} 内容]:\n${docText}`;
+                    }
+                }
+
+                if (uploadedFiles.length && !text) {
+                    display = '请分析以上文件';
+                }
+                
+                addMessage('user', display + (mediaPreviews ? mediaPreviews : ''));
+                
+                const combined = (text + ' ' + extracted).trim();
+                uploadedFiles = []; 
+                renderFilePreview(); 
+                document.getElementById('text-input').value = '';
+                
+                await processUserInput(combined);
+            } catch (err) {
+                showToast('发送失败: ' + err.message);
+            } finally {
+                btn.disabled = false; 
+                btn.innerHTML = '发送 ➤';
+            }
+        }
+        function addMessage(type, text, metaHTML = '') {
+            const container = document.getElementById('chat-messages');
+            const div = document.createElement('div');
+            div.className = `message ${type}`;
+            div.innerHTML = `<div class="msg-avatar">${type==='user'?'👤':'🤖'}</div><div><div class="msg-bubble">${escapeHTML(text).replace(/\n/g, '<br>')}</div>${metaHTML?'<div class="msg-meta">'+metaHTML+'</div>':''}</div>`;
+            container.appendChild(div); container.scrollTop = container.scrollHeight;
+            return div;
+        }
+        function updateBotMessage(div, text, metaHTML = '') {
+            const bubble = div.querySelector('.msg-bubble');
+            bubble.innerHTML = simpleMarkdownToHTML(text);
+            const meta = div.querySelector('.msg-meta');
+            if (meta) meta.innerHTML = metaHTML;
+            const container = document.getElementById('chat-messages');
+            container.scrollTop = container.scrollHeight;
+        }
+        function escapeHTML(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+        function simpleMarkdownToHTML(text) {
+            return text
+                .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+                .replace(/```([\s\S]*?)```/g, '<pre>$1</pre>')
+                .replace(/`([^`]+)`/g, '<code>$1</code>')
+                .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+                .replace(/\*(.+?)\*/g, '<em>$1</em>')
+                .replace(/^### (.+)$/gm, '<h4>$1</h4>').replace(/^## (.+)$/gm, '<h3>$1</h3>').replace(/^# (.+)$/gm, '<h2>$1</h2>')
+                .replace(/^\d+\. (.+)$/gm, '<li>$1</li>')
+                .replace(/^(?!<[hlu])(.+)$/gm, '<p>$1</p>')
+                .replace(/\n/g, '');
+        }
+
+        // ==================== 姓名处理 ====================
+        function getNameSuffix(name) {
+            if (!name || typeof name !== 'string') return '👤';
+            name = name.trim();
+            if (name.length >= 3) return name.substring(name.length - 2);
+            if (name.length === 2) return name.substring(1);
+            return name;
+        }
+
+        // ==================== 意图识别 ====================
+        function identifyIntent(input) {
+            const s = input.toLowerCase();
+            if (/(写.*)?(信息报道|通讯报道|通信报道|新闻稿|报道稿)/i.test(s)) return 'report';
+            if (/补充|上传.*知识库|补充.*文档|提供.*资料/i.test(s) && !/解说|讲解/i.test(s)) return 'supplement';
+            if (/解说词|讲解|介绍词|场景.*描述|字数.*生成|保障.*任务|参与.*重大/i.test(s)) return 'narrator';
+            // 故障排除：强故障词直接匹配
+            if (/故障|排除|维修|修复|报错|错误代码|告警|失灵|损坏|无法对星|对不上星|搜不到星|连不上|没信号|无信号|信号差|卡死|死机|卡顿|闪退|崩溃|黑屏|白屏|花屏|重启|自动关机|无法开机|上不了网|登不上|进不去|打不开|开不了|不工作|不运行|不转|不动|不亮|不显示|不响应|失控|失效|坏掉|破裂|断裂|磨损|老化|过热|冒烟|短路|断路|进水|受潮|生锈|松动|脱落|参数错误|配置错误|超时|卡住|无响应|丢失|偏差|偏移|漂移|抖动|异响|噪音|泄漏|漏气|漏液|压力不足|电压不足|电流过大|转速异常|温度异常|报警|警报|预警|故障码|错误码/i.test(s)) return 'maintainer';
+            // 故障排除：疑问词+装备名组合
+            if (/怎么回事|为什么|怎么办|怎么解决|怎么处理|怎么修|什么原因|什么毛病|什么问题|什么故障|无法|不能|不行/.test(s) && s.length > 4) return 'maintainer';
+            return 'beginner';
+        }
+
+        function getIntentLabel(intent) {
+            const map = { 
+                maintainer:{text:'故障排除',class:'maintainer',emoji:'🔧'}, 
+                beginner:{text:'知识问答',class:'beginner',emoji:'📖'}, 
+                narrator:{text:'解说词生成',class:'narrator',emoji:'🎙️'}, 
+                supplement:{text:'知识库补充',class:'supplement',emoji:'📤'},
+                report:{text:'通讯报道撰写',class:'report',emoji:'📝'}
+            };
+            return map[intent] || map.beginner;
+        }
+
+        // ==================== LLM 调用 ====================
+        async function callLLM(messages, onChunk = null) {
+            const { data: { session } } = await supabaseClient.auth.getSession();
+            if (!session) throw new Error('登录已过期，请重新登录');
+
+            const response = await fetch(LLM_BASE_URL, {
+                method: 'POST',
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${session.access_token}`
+                },
+                body: JSON.stringify({ 
+                    model: LLM_MODEL, 
+                    messages, 
+                    temperature: 0.3, // 调低温度提升 RAG 稳定性
+                    max_tokens: 1500, // 略微减少输出长度节省 token
+                    stream: !!onChunk 
+                })
+            });
+
+            if (!response.ok) {
+                let errData;
+                try { errData = await response.json(); } catch(e) {}
+                const code = errData?.code;
+                const msg = errData?.error || `请求失败 (${response.status})`;
+
+                if (code === 'RATE_LIMITED') throw new Error('请求太频繁了，请稍后再试');
+                if (code === 'UNAUTHORIZED') throw new Error('登录已过期，请重新登录');
+                if (code === 'FORBIDDEN') throw new Error('账号未审核通过，请联系管理员');
+                if (code === 'LLM_TIMEOUT') throw new Error('AI 响应超时，请稍后重试');
+                if (code === 'BAD_REQUEST') throw new Error('请求参数错误：' + msg);
+                throw new Error(msg);
+            }
+
+            if (!onChunk) {
+                const data = await response.json();
+                return data.choices[0].message.content;
+            }
+
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+            let fullText = '';
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                const chunk = decoder.decode(value, { stream: true });
+                const lines = chunk.split('\n');
+                for (const line of lines) {
+                    if (line.startsWith('data: ')) {
+                        const json = line.slice(6).trim();
+                        if (json === '[DONE]') continue;
+                        try { const obj = JSON.parse(json); const delta = obj.choices?.[0]?.delta?.content || ''; if (delta) { fullText += delta; onChunk(fullText); } } catch(e){}
+                    }
+                }
+            }
+            return fullText;
+        }
+
+        // ==================== 知识库检索 ====================
+        async function searchKnowledgeBase(query) {
+            try {
+                const q = query.toLowerCase();
+                let { data: allData, error } = await supabaseClient.from('knowledge_base').select('*').eq('status', 'active');
+                if (error) throw error;
+                if (!allData) allData = [];
+
+                const results = allData.map(doc => {
+                    let score = 0;
+                    const equipment = (doc.equipment || '').toLowerCase();
+                    const title = (doc.title || '').toLowerCase();
+                    const content = (doc.content || '').toLowerCase();
+
+                    const nameText = equipment + title;
+                    for (let len = 6; len >= 2; len--) {
+                        let matched = false;
+                        for (let i = 0; i <= nameText.length - len; i++) {
+                            const piece = nameText.substring(i, i + len);
+                            if (q.includes(piece)) {
+                                score += (len >= 4 ? 0.6 : 0.4);
+                                matched = true;
+                                break;
+                            }
+                        }
+                        if (matched) break;
+                    }
+
+                    const qChars = q.replace(/[^\u4e00-\u9fa5a-z0-9]/g, '');
+                    for (let i = 0; i < qChars.length - 1; i++) {
+                        const bigram = qChars.substring(i, i + 2);
+                        if (content.includes(bigram)) {
+                            score += 0.2;
+                            break;
+                        }
+                    }
+
+                    return { ...doc, score: Math.min(score, 1) };
+                }).filter(r => r.score > 0);
+
+                results.sort((a, b) => b.score - a.score);
+                console.log('🔍 召回文档:', results.map(r => ({ title: r.title, score: r.score, contentLen: r.content ? r.content.length : 0 })));
+                return results;
+            } catch (err) { 
+                console.error('搜索失败:', err); 
+                return []; 
+            }
+        }
+
+        // ==================== 回答守则 ====================
+        let currentAnswerRules = '';
+        const DEFAULT_ANSWER_RULES = `## AI 回答守则
+
+### 一、安全保密
+- 严禁透露任何密码、密钥、Token、API 凭证等敏感信息。
+- 不得泄露用户个人隐私数据。
+
+### 二、无法回答时的处理
+1. **能确定是某装备但回答不上来**：
+   - 请引导用户联系该装备的维护人。
+   - 维护人姓名和电话请从「装备信息管理」中获取。
+
+2. **完全无法回答的问题**：
+   - 统一回答：「无法回答您的问题，请按照「装备：（装备名称），问题：（具体问题描述）」格式提问，以便我为您精准匹配知识库文档。」
+
+### 三、回答风格
+- 故障排除类问题：步骤清晰、可执行，优先引用知识库文档内容。
+- 知识问答类问题：通俗易懂，必要时分解操作步骤。
+- 解说词生成类问题：语言庄重、条理清晰，适合现场讲解。
+
+### 四、引用规范
+- 必须基于提供的知识库文档作答。
+- 文档中未涉及的内容，明确说明「根据现有资料无法确定」。
+- 严禁编造文档中不存在的参数、型号、操作步骤。`;
+
+        async function loadAnswerRules() {
+            try {
+                const { data, error } = await supabaseClient.from('answer_rules').select('content').order('updated_at', { ascending: false }).limit(1).maybeSingle();
+                if (error) {
+                    console.warn('加载回答守则失败:', error.message);
+                    currentAnswerRules = DEFAULT_ANSWER_RULES;
+                } else if (data && data.content) {
+                    currentAnswerRules = data.content;
+                } else {
+                    currentAnswerRules = DEFAULT_ANSWER_RULES;
+                }
+            } catch (e) {
+                currentAnswerRules = DEFAULT_ANSWER_RULES;
+            }
+        }
+
+        async function loadAnswerRulesPanel() {
+            await loadAnswerRules();
+            document.getElementById('answer-rules-editor').value = currentAnswerRules;
+            updateRulesPreview();
+        }
+
+        const rulesEditor = document.getElementById('answer-rules-editor'); if (rulesEditor) rulesEditor.addEventListener('input', updateRulesPreview);
+        function updateRulesPreview() {
+            const editor = document.getElementById('answer-rules-editor');
+            const preview = document.getElementById('rules-preview');
+            const text = editor ? editor.value : currentAnswerRules;
+            preview.textContent = `你是设备操作维护智能助手。\n\n${text}\n\n=== 以下是从知识库召回的相关文档，请基于文档内容回答 ===`;
+        }
+
+        async function saveAnswerRules() {
+            const content = document.getElementById('answer-rules-editor').value.trim();
+            if (!content) { showToast('守则内容不能为空'); return; }
+            const btn = document.getElementById('btn-save-rules');
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner"></span> 保存中...';
+            try {
+                const { error } = await supabaseClient.from('answer_rules').upsert({ id: 1, content, updated_at: new Date().toISOString() });
+                if (error) throw error;
+                currentAnswerRules = content;
+                document.getElementById('rules-save-status').innerHTML = '<span style="color:var(--success);">✅ 守则已保存并即时生效</span>';
+                setTimeout(() => document.getElementById('rules-save-status').innerHTML = '', 3000);
+            } catch (err) {
+                document.getElementById('rules-save-status').innerHTML = '<span style="color:var(--danger);">❌ 保存失败：' + escapeHTML(err.message) + '（请确认已创建 answer_rules 表）</span>';
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '💾 保存守则';
+            }
+        }
+
+        function resetAnswerRules() {
+            document.getElementById('answer-rules-editor').value = DEFAULT_ANSWER_RULES;
+            updateRulesPreview();
+            showToast('已恢复默认守则，请点击保存生效');
+        }
+
+        // ==================== 核心：AI 处理用户输入 ====================        
+        async function processUserInput(input) {
+            const intent = identifyIntent(input);
+            const info = getIntentLabel(intent);
+            if (intent === 'supplement') {
+                if (currentUser.role === 'admin') {
+                    addMessage('bot', '管理员请通过「知识库管理」面板直接添加文档。', `<span class="intent-tag ${info.class}">${info.emoji} ${info.text}</span>`);
+                } else {
+                    openSupplementModal();
+                    addMessage('bot', '请在弹出的窗口中填写并上传补充文档，管理员审核后可入库。', `<span class="intent-tag ${info.class}">${info.emoji} ${info.text}</span>`);
+                }
+                // 记录知识库补充统计
+                try {
+                    const statsPayload = { user_id: currentUser.id, equipment: '知识库补充', intent: 'supplement', query: input.substring(0, 500) };
+                    let { error: statsErr } = await supabaseClient.from('usage_stats').insert(statsPayload);
+                    if (statsErr && statsErr.message) {
+                        console.warn('usage_stats 补充记录失败:', statsErr.message);
+                    }
+                } catch(e) { console.log('补充统计记录失败:', e); }
+                return;
+            }
+            const results = await searchKnowledgeBase(input);
+            const hasContext = results.length > 0 && results[0].score > 0;
+            let systemPrompt = `你是设备操作维护智能助手，名为「设备云助手」。你的职责是根据提供的参考文档，准确、专业地回答用户的装备操作和维护问题。\n\n${currentAnswerRules || DEFAULT_ANSWER_RULES}`;
+
+            // 尝试获取装备维护人信息，用于无法回答时的引导
+            let maintainerInfo = '';
+            try {
+                if (hasContext && results[0] && results[0].equipment) {
+                    const { data: eqData } = await supabaseClient
+                        .from('equipment_info')
+                        .select('maintainer_name, maintainer_phone')
+                        .eq('equipment_name', results[0].equipment)
+                        .maybeSingle();
+                    if (eqData && eqData.maintainer_name) {
+                        maintainerInfo = `\n\n【装备维护人信息】\n- 姓名：${eqData.maintainer_name}\n- 电话：${eqData.maintainer_phone || '未记录'}\n`;
+                    }
+                }
+            } catch(e) { /* 静默处理 */ }
+            if (intent === 'maintainer') systemPrompt += ` 你当前处于「故障排除」模式：请重点给出故障排查步骤、维修方法、安全注意事项，步骤要清晰可执行。`;
+            if (maintainerInfo) systemPrompt += maintainerInfo;
+            if (intent === 'beginner') systemPrompt += ` 你当前处于「知识问答」模式：请用通俗易懂的语言解释，避免过多专业术语，必要时给出操作步骤的分解说明。`;
+            if (intent === 'narrator') systemPrompt += ` 你当前处于「解说词生成」模式：请生成一段正式的装备解说词，适合现场讲解或汇报使用，语言庄重、条理清晰。`;
+            if (intent === 'report') systemPrompt += ` 你当前处于「通讯报道撰写」模式：请基于装备信息和提供的参考资料，撰写一篇新闻通讯稿、信息报道或宣传稿件。要求：标题亮眼、结构清晰（导语、主体、结尾）、语言生动、突出亮点或保障成效。`;
+            let userPrompt = input;
+            let metaExtra = '';
+            if (hasContext) {
+                const topDocs = results.slice(0, 3);
+                let totalLen = 0;
+                const context = topDocs.map((r, i) => {
+                    const docText = r.content && r.content.trim().length > 0 
+                        ? r.content.substring(0, 20000) 
+                        : '（该文档暂无文本内容，可能为扫描版或解析失败）';
+                    totalLen += docText.length;
+                    return `【参考文档${i+1}】\n文档标题：${r.title}\n装备名称：${r.equipment}\n\n${docText}`;
+                }).join('\n\n==================\n\n');
+
+                systemPrompt += `\n\n=== 以下是从知识库召回的 ${topDocs.length} 份相关文档片段，请仔细阅读后基于文档内容回答 ===\n\n${context}\n\n=== 片段结束 ===\n\n重要约束：\n1. 以上内容为文档中的关键片段，请直接基于此回答。\n2. 如果片段中没有相关信息，请明确说明「根据现有资料无法确定」。\n3. 严禁编造信息，绝对禁止说"未检索到知识库"。`;
+                metaExtra = ` <span style="font-size:10px;">📄 ${topDocs.map(d => d.title).join(', ')}</span>`;
+            } else {
+                systemPrompt += `\n\n当前未检索到与用户问题直接相关的知识库文档。请基于你的通用知识给出合理建议，但请务必提醒用户：「以上回答未匹配到本单位知识库文档，仅供参考，关键操作请以正式技术手册为准。」`;
+                metaExtra = ` <span style="font-size:10px;">⚠️ 未匹配知识库</span>`;
+            }
+            try {
+                const equipmentName = hasContext && results[0] ? (results[0].equipment || results[0].title || '未知装备') : '未匹配知识库';
+                // 预估 token 消耗 (字符数/1.5 是一个粗略估算)
+                const estimatedTokens = Math.ceil((systemPrompt.length + userPrompt.length) / 1.5);
+                
+                const statsPayload = {
+                    user_id: currentUser.id,
+                    equipment: equipmentName,
+                    intent: intent,
+                    query: input.substring(0, 500),
+                    tokens: estimatedTokens
+                };
+                
+                // 暂时保留 payload，在 LLM 回答完成后再插入包含回答内容的完整记录
+                window.lastPendingStats = statsPayload;
+            } catch(e) { console.log('准备统计数据失败:', e); }
+
+            const messages = [ { role: 'system', content: systemPrompt }, { role: 'user', content: userPrompt } ];
+            const metaHTML = `<span class="intent-tag ${info.class}">${info.emoji} ${info.text}</span><span class="intent-tag ai">🧠 AI生成中</span>${metaExtra}`;
+            const msgDiv = addMessage('bot', '<div class="ai-thinking"><span class="spinner"></span> AI 正在理解文档并生成回答...</div>', metaHTML);
+            try {
+                const fullResponse = await callLLM(messages, (text) => {
+                    updateBotMessage(msgDiv, text, metaHTML.replace('AI生成中', '✅ AI已生成'));
+                });
+
+                // 回答完成后，保存包含回答内容的完整记录
+                if (window.lastPendingStats) {
+                    window.lastPendingStats.response = fullResponse;
+                    await supabaseClient.from('usage_stats').insert(window.lastPendingStats);
+                    window.lastPendingStats = null;
+                }
+            } catch (err) {
+                updateBotMessage(msgDiv, `❌ AI 回答失败：${err.message}。请检查 LLM API Key 是否正确，或稍后重试。`, metaHTML);
+            }
+        }
+
+        // ==================== 补充知识库 ====================
+        function openSupplementModal() {
+            document.getElementById('modal-supplement').classList.add('active');
+            document.getElementById('sup-name').value = currentUser.name || '';
+            document.getElementById('sup-phone').value = currentUser.phone || '';
+            if (!document.getElementById('sup-equipment').value) {
+                document.getElementById('sup-equipment').value = '';
+            }
+            document.getElementById('sup-file-name').textContent = '';
+            pendingSupplement = null;
+        }
+        function closeSupplementModal() { document.getElementById('modal-supplement').classList.remove('active'); pendingSupplement = null; }
+        function handleSupFileSelect(input) {
+            const file = input.files[0]; if (!file) return;
+            if (file.size > MAX_FILE_SIZE) { showToast('文件不能超过50MB'); input.value = ''; return; }
+            document.getElementById('sup-file-name').textContent = '✅ ' + file.name;
+            pendingSupplement = { file };
+        }
+        async function submitSupplement() {
+            const name = document.getElementById('sup-name').value.trim();
+            const phone = document.getElementById('sup-phone').value.trim();
+            const equipment = document.getElementById('sup-equipment').value.trim();
+            const file = pendingSupplement?.file;
+            if (!name || !phone || !equipment || !file) { showToast('请填写完整信息并选择文件'); return; }
+            const btn = document.getElementById('btn-sup-submit');
+            btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> 提交中...';
+            try {
+                let parsedContent = '';
+                const parseResult = await parseDocument(file);
+                if (parseResult.success) {
+                    parsedContent = parseResult.text.substring(0, 30000);
+                    showToast(`文档解析成功，共提取 ${parseResult.text.length} 字符`);
+                } else {
+                    showToast('文档内容提取失败，将仅保存文件');
+                }
+
+                const ext = file.name.split('.').pop();
+                const safeName = `${Date.now()}_${Math.random().toString(36).substring(2, 10)}.${ext}`;
+                const filePath = `pending/${safeName}`;
+                const { error: uploadError } = await supabaseClient.storage.from('documents').upload(filePath, file);
+                if (uploadError) throw uploadError;
+                const { data: urlData } = supabaseClient.storage.from('documents').getPublicUrl(filePath);
+
+                // V22 修复：兼容 pending_docs 表可能没有 content 字段的情况
+                let insertData = {
+                    file_name: `补充知识库-${equipment}-${name}-${phone}.${file.name.split('.').pop()}`,
+                    original_name: file.name, equipment, submitter_name: name, submitter_phone: phone,
+                    submitter_id: currentUser.id, file_path: urlData.publicUrl, content: parsedContent
+                };
+                let { error } = await supabaseClient.from('pending_docs').insert(insertData);
+
+                // 如果失败是因为 content 字段不存在，则尝试不带 content 插入
+                if (error && error.message && error.message.includes('content')) {
+                    console.warn('pending_docs 表缺少 content 字段，尝试不带 content 插入');
+                    delete insertData.content;
+                    const result = await supabaseClient.from('pending_docs').insert(insertData);
+                    error = result.error;
+                }
+
+                if (error) throw error;
+
+                showToast('补充文档已提交，等待管理员审核。');
+                closeSupplementModal();
+                document.getElementById('sup-file-input').value = '';
+                document.getElementById('sup-file-name').textContent = '';
+                pendingSupplement = null;
+                addMessage('bot', '✅ 您的补充文档已提交审核，管理员通过后将会入库。', '<span class="intent-tag supplement">📤 知识库补充</span>');
+            } catch (err) { showToast('提交失败：' + (err.message || '未知错误')); }
+            finally { btn.disabled = false; btn.textContent = '提交补充文档'; }
+        }
+
+        // ==================== 管理员：知识库上传 ====================
+        async function handleKBUpload(input) {
+            const files = input.files;
+            if (!files.length) return;
+            if (!currentUser || currentUser.role !== 'admin') { showToast('仅管理员可操作'); return; }
+
+            pendingKBUpload = { files: Array.from(files), input };
+
+            const firstFile = files[0];
+            const suggestedEquipment = firstFile.name.replace(/\.[^.]+$/, '').replace(/[_\-\s]+/g, ' ').substring(0, 50);
+
+            const { data: eqInfo } = await supabaseClient
+                .from('equipment_info')
+                .select('*')
+                .eq('equipment_name', suggestedEquipment)
+                .maybeSingle();
+
+            const uploaderName = currentUser.name || '';
+            const uploaderPhone = currentUser.phone || '';
+            document.getElementById('kb-meta-equipment').value = suggestedEquipment;
+
+            document.getElementById('kb-meta-uploader-name').value = uploaderName;
+            document.getElementById('kb-meta-uploader-name').readOnly = !!uploaderName;
+            document.getElementById('kb-meta-uploader-name').style.background = uploaderName ? '#f1f5f9' : '#fff';
+
+            document.getElementById('kb-meta-uploader-phone').value = uploaderPhone;
+            document.getElementById('kb-meta-uploader-phone').readOnly = !!uploaderPhone;
+            document.getElementById('kb-meta-uploader-phone').style.background = uploaderPhone ? '#f1f5f9' : '#fff';
+
+            document.getElementById('kb-meta-maintainer-name').value = eqInfo?.maintainer_name || '';
+            document.getElementById('kb-meta-maintainer-phone').value = eqInfo?.maintainer_phone || '';
+
+            document.getElementById('modal-kb-meta').classList.add('active');
+        }
+
+        async function confirmKBMeta() {
+            const equipment = document.getElementById('kb-meta-equipment').value.trim();
+            const uploaderName = document.getElementById('kb-meta-uploader-name').value.trim();
+            const uploaderPhone = document.getElementById('kb-meta-uploader-phone').value.trim();
+            const maintainerName = document.getElementById('kb-meta-maintainer-name').value.trim();
+            const maintainerPhone = document.getElementById('kb-meta-maintainer-phone').value.trim();
+
+            if (!equipment || !uploaderName || !uploaderPhone || !maintainerName || !maintainerPhone) {
+                showToast('请填写完整信息（所有带 * 项必填）');
+                return;
+            }
+
+            if (!currentUser.name) currentUser.name = uploaderName;
+            if (!currentUser.phone) currentUser.phone = uploaderPhone;
+
+            const { data: existing } = await supabaseClient
+                .from('equipment_info')
+                .select('*')
+                .eq('equipment_name', equipment)
+                .maybeSingle();
+
+            if (!existing) {
+                const { error: eqError } = await supabaseClient
+                    .from('equipment_info')
+                    .insert({
+                        equipment_name: equipment,
+                        maintainer_name: maintainerName,
+                        maintainer_phone: maintainerPhone
+                    });
+                if (eqError) {
+                    showToast('创建装备信息失败：' + eqError.message);
+                    return;
+                }
+            } else {
+                if (existing.maintainer_name !== maintainerName || existing.maintainer_phone !== maintainerPhone) {
+                    await supabaseClient
+                        .from('equipment_info')
+                        .update({ maintainer_name: maintainerName, maintainer_phone: maintainerPhone })
+                        .eq('equipment_name', equipment);
+                }
+            }
+
+            document.getElementById('modal-kb-meta').classList.remove('active');
+
+            await doKBUpload(pendingKBUpload.files, { equipment });
+
+            pendingKBUpload.input.value = '';
+            pendingKBUpload = null;
+        }
+
+        function closeKBMetaModal() {
+            document.getElementById('modal-kb-meta').classList.remove('active');
+            pendingKBUpload = null;
+        }
+
+        async function doKBUpload(files, meta) {
+            const statusDiv = document.getElementById('kb-upload-status');
+            const loading = document.getElementById('kb-loading');
+            loading.classList.add('active'); 
+            statusDiv.innerHTML = '';
+            let successCount = 0;
+
+            for (let f of files) {
+                if (f.size > MAX_FILE_SIZE) {
+                    statusDiv.innerHTML += `<div class="parse-status err">❌ ${escapeHTML(f.name)} 超过50MB，已跳过</div>`;
+                    continue;
+                }
+
+                let content = '';
+                let parseInfo = '';
+                const parseResult = await parseDocument(f);
+                if (parseResult.success) {
+                    content = parseResult.text.substring(0, 50000);
+                    parseInfo = `<span class="parse-status ok">✅ 已提取 ${parseResult.text.length} 字符</span>`;
+                } else {
+                    parseInfo = `<span class="parse-status warn">⚠️ ${parseResult.error}</span>`;
+                }
+
+                try {
+                    const ext = f.name.split('.').pop();
+                    const safeName = `${Date.now()}_${Math.random().toString(36).substring(2, 10)}.${ext}`;
+                    const filePath = `kb/${safeName}`;
+                    const { error: upErr } = await supabaseClient.storage.from('documents').upload(filePath, f);
+                    if (upErr) throw upErr;
+                    const { data: urlData } = supabaseClient.storage.from('documents').getPublicUrl(filePath);
+
+                    // V22 修复：兼容 knowledge_base 表可能没有 content 字段的情况
+                    let insertData = {
+                        title: f.name, 
+                        equipment: meta.equipment,
+                        file_type: f.name.split('.').pop().toUpperCase(),
+                        uploader_id: currentUser.id, 
+                        content,
+                        file_path: urlData.publicUrl, 
+                        status: 'active'
+                    };
+                    let { error: insertErr } = await supabaseClient.from('knowledge_base').insert(insertData);
+
+                    if (insertErr && insertErr.message && insertErr.message.includes('content')) {
+                        console.warn('knowledge_base 表缺少 content 字段，尝试不带 content 插入');
+                        delete insertData.content;
+                        const result = await supabaseClient.from('knowledge_base').insert(insertData);
+                        insertErr = result.error;
+                    }
+
+                    if (insertErr) throw insertErr;
+                    successCount++;
+                    statusDiv.innerHTML += `<div class="parse-status ok">✅ ${escapeHTML(f.name)} 上传成功 ${parseInfo}</div>`;
+                } catch (err) {
+                    statusDiv.innerHTML += `<div class="parse-status err">❌ ${escapeHTML(f.name)} 上传失败：${err.message}</div>`;
+                }
+            }
+
+            loading.classList.remove('active');
+            if (successCount > 0) {
+                statusDiv.innerHTML += `<div class="parse-status ok" style="margin-top:8px;font-weight:600;">✅ 共成功上传 ${successCount} 个文件</div>`;
+                await loadKnowledgeBaseTable(); 
+                await updateKBStatus();
+            }
+        }
+
+        // ==================== 知识库文档编辑 ====================
+        async function openKBEditModal(id) {
+            try {
+                const { data: doc, error } = await supabaseClient.from('knowledge_base').select('*').eq('id', id).single();
+                if (error || !doc) throw new Error('文档不存在');
+
+                const { data: eqInfo } = await supabaseClient
+                    .from('equipment_info')
+                    .select('*')
+                    .eq('equipment_name', doc.equipment)
+                    .maybeSingle();
+
+                document.getElementById('kb-edit-id').value = id;
+                document.getElementById('kb-edit-title').value = doc.title || '';
+                document.getElementById('kb-edit-equipment').value = doc.equipment || '';
+                document.getElementById('kb-edit-maintainer-name').value = eqInfo?.maintainer_name || '';
+                document.getElementById('kb-edit-maintainer-phone').value = eqInfo?.maintainer_phone || '';
+
+                document.getElementById('modal-kb-edit').classList.add('active');
+            } catch (err) {
+                showToast('加载文档失败：' + err.message);
+            }
+        }
+
+        function closeKBEditModal() {
+            document.getElementById('modal-kb-edit').classList.remove('active');
+        }
+
+        async function saveKBEdit() {
+            const id = document.getElementById('kb-edit-id').value;
+            const title = document.getElementById('kb-edit-title').value.trim();
+            const equipment = document.getElementById('kb-edit-equipment').value.trim();
+            const maintainerName = document.getElementById('kb-edit-maintainer-name').value.trim();
+            const maintainerPhone = document.getElementById('kb-edit-maintainer-phone').value.trim();
+
+            if (!title || !equipment) {
+                showToast('文档名称和归属装备必填');
+                return;
+            }
+
+            const btn = document.getElementById('btn-kb-edit-save');
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner"></span> 保存中...';
+
+            try {
+                const { error: kbError } = await supabaseClient
+                    .from('knowledge_base')
+                    .update({ title, equipment })
+                    .eq('id', id);
+                if (kbError) throw kbError;
+
+                const { data: existingEq } = await supabaseClient
+                    .from('equipment_info')
+                    .select('*')
+                    .eq('equipment_name', equipment)
+                    .maybeSingle();
+
+                if (existingEq) {
+                    if (maintainerName || maintainerPhone) {
+                        const updates = {};
+                        if (maintainerName) updates.maintainer_name = maintainerName;
+                        if (maintainerPhone) updates.maintainer_phone = maintainerPhone;
+                        const { error: eqErr } = await supabaseClient.from('equipment_info').update(updates).eq('id', existingEq.id);
+                        if (eqErr) throw eqErr;
+                    }
+                } else {
+                    const { error: eqErr } = await supabaseClient.from('equipment_info').insert({
+                        equipment_name: equipment,
+                        maintainer_name: maintainerName || '',
+                        maintainer_phone: maintainerPhone || ''
+                    });
+                    if (eqErr) throw eqErr;
+                }
+
+                showToast('文档信息已更新');
+                closeKBEditModal();
+                await loadKnowledgeBaseTable();
+                await loadEquipmentInfoTable();
+            } catch (err) {
+                showToast('保存失败：' + err.message);
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '保存修改';
+            }
+        }
+
+        async function loadKnowledgeBaseTable(page = 1) {
+            const tbody = document.getElementById('kb-table-body');
+            window.kbCurrentPage = page;
+            try {
+                const { data: kbData, error } = await supabaseClient
+                    .from('knowledge_base')
+                    .select('*')
+                    .eq('status', 'active');
+
+                if (error) throw error;
+                if (!kbData || !kbData.length) { 
+                    tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:var(--text-light);">暂无文档</td></tr>'; 
+                    document.getElementById('kb-pagination').innerHTML = '';
+                    return; 
+                }
+
+                // 统一排序逻辑：数字 -> 字母 -> 汉字拼音
+                kbData.sort((a, b) => {
+                    const valA = (a.equipment || '').trim();
+                    const valB = (b.equipment || '').trim();
+                    return valA.localeCompare(valB, 'zh-Hans-CN', { numeric: true, sensitivity: 'accent' });
+                });
+
+                const uploaderIds = [...new Set(kbData.map(d => d.uploader_id).filter(Boolean))];
+                let profileMap = {};
+                if (uploaderIds.length) {
+                    const { data: profiles } = await supabaseClient.from('profiles').select('id, name, phone').in('id', uploaderIds);
+                    profiles?.forEach(p => { profileMap[p.id] = p; });
+                }
+
+                const eqNames = [...new Set(kbData.map(d => d.equipment).filter(Boolean))];
+                let eqMap = {};
+                if (eqNames.length) {
+                    const { data: eqs } = await supabaseClient.from('equipment_info').select('*').in('equipment_name', eqNames);
+                    eqs?.forEach(e => { eqMap[e.equipment_name] = e; });
+                }
+
+                const grouped = {};
+                kbData.forEach(item => {
+                    const eq = item.equipment || '未分类';
+                    if (!grouped[eq]) grouped[eq] = [];
+                    grouped[eq].push(item);
+                });
+
+                // V29 分页：按归属装备分页（每个装备算1条）
+                const eqEntries = Object.entries(grouped);
+                const totalItems = eqEntries.length;
+                const startIdx = (page - 1) * PAGE_SIZE;
+                const endIdx = startIdx + PAGE_SIZE;
+                const pageEntries = eqEntries.slice(startIdx, endIdx);
+
+                let html = '';
+                pageEntries.forEach(([eqName, docs]) => {
+                    const eqInfo = eqMap[eqName];
+                    html += `
+                        <tr class="group-header">
+                            <td colspan="9" style="background:#f8fafc;font-weight:600;color:var(--text);padding:6px 12px;border-bottom:1px solid var(--border);font-size:13px;">
+                                <span style="display:inline-flex;align-items:center;gap:6px;">
+                                    <span style="color:var(--primary);">▸</span> ${escapeHTML(eqName)}
+                                    <span style="color:var(--text-light);font-weight:400;">(${docs.length} 份文档)</span>
+                                </span>
+                            </td>
+                        </tr>
+                    `;
+                    docs.forEach(item => {
+                        const profile = profileMap[item.uploader_id] || {};
+                        const isReadable = item.content && item.content.trim().length > 10;
+                        const contentLen = item.content ? item.content.length : 0;
+                        html += `
+                            <tr>
+                                <td>${escapeHTML(item.equipment || '-')}</td>
+                                <td>${escapeHTML(item.title)}${item.file_path?`<br><small><a href="${item.file_path}" target="_blank">查看文件</a></small>`:''}</td>
+                                <td><span class="badge badge-info">${item.file_type || '未知'}</span></td>
+                                <td>${isReadable ? `<span class="badge badge-success">✅ 已解析 ${contentLen}字</span>` : '<span class="badge badge-warning">⚠️ 仅存储</span>'}</td>
+                                <td>${escapeHTML(profile.name || '-')}</td>
+                                <td>${escapeHTML(profile.phone || '-')}</td>
+                                <td>${escapeHTML(eqInfo?.maintainer_name || '-')}</td>
+                                <td>${escapeHTML(eqInfo?.maintainer_phone || '-')}</td>
+                                <td>
+                                    <button type="button" class="btn-sm btn-approve" onclick="openKBEditModal(${item.id})">编辑</button>
+                                    <button type="button" class="btn-sm btn-reject" onclick="removeKB(${item.id})">移除</button>
+                                </td>
+                            </tr>
+                        `;
+                    });
+                });
+
+                tbody.innerHTML = html;
+                renderPagination('kb-pagination', totalItems, page, 'loadKnowledgeBaseTable');
+            } catch (err) { 
+                tbody.innerHTML = `<tr><td colspan="9" style="text-align:center;color:var(--danger);">加载失败：${err.message}</td></tr>`; 
+            }
+        }
+
+        async function removeKB(id) {
+            if (!confirm('确定移除该文档？此操作不可恢复。')) return;
+            try { 
+                const { error } = await supabaseClient.from('knowledge_base').delete().eq('id', id); 
+                if (error) throw error; 
+                await loadKnowledgeBaseTable(); 
+                await updateKBStatus(); 
+                showToast('已移除'); 
+            }
+            catch (err) { showToast('移除失败：' + err.message); }
+        }
+
+        // ==================== 装备信息管理 ====================
+        async function loadEquipmentInfoTable(page = 1) {
+            const tbody = document.getElementById('equipment-table-body');
+            window.equipmentCurrentPage = page;
+            try {
+                const { data: eqData, error } = await supabaseClient
+                    .from('equipment_info')
+                    .select('*')
+                    .order('created_at', { ascending: false });
+
+                if (error) throw error;
+
+                const eqNames = eqData?.map(e => e.equipment_name) || [];
+                let docCounts = {};
+                if (eqNames.length) {
+                    const { data: kbData } = await supabaseClient
+                        .from('knowledge_base')
+                        .select('equipment')
+                        .eq('status', 'active')
+                        .in('equipment', eqNames);
+                    kbData?.forEach(k => {
+                        docCounts[k.equipment] = (docCounts[k.equipment] || 0) + 1;
+                    });
+                }
+
+                if (!eqData || !eqData.length) {
+                    tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:var(--text-light);">暂无装备信息</td></tr>';
+                    document.getElementById('equipment-pagination').innerHTML = '';
+                    return;
+                }
+
+                // 统一排序逻辑：数字 -> 字母 -> 汉字拼音
+                eqData.sort((a, b) => {
+                    const valA = (a.equipment_name || '').trim();
+                    const valB = (b.equipment_name || '').trim();
+                    return valA.localeCompare(valB, 'zh-Hans-CN', { numeric: true, sensitivity: 'accent' });
+                });
+
+                // V29 分页
+                const totalItems = eqData.length;
+                const startIdx = (page - 1) * PAGE_SIZE;
+                const endIdx = startIdx + PAGE_SIZE;
+                const pageData = eqData.slice(startIdx, endIdx);
+
+                tbody.innerHTML = pageData.map(e => `
+                    <tr>
+                        <td>${escapeHTML(e.equipment_name)}</td>
+                        <td>${e.image_url ? `<img src="${e.image_url}" style="width:80px;height:50px;object-fit:cover;border-radius:6px;cursor:pointer;" onclick="window.open('${e.image_url}')" title="点击查看大图">` : '<span style="color:var(--text-light);font-size:12px;">无图片</span>'}</td>
+                        <td>${e.quantity || 1}</td>
+                        <td>${escapeHTML(e.asset_number || '-')}</td>
+                        <td>${escapeHTML(e.maintainer_name)}</td>
+                        <td>${escapeHTML(e.maintainer_phone)}</td>
+                        <td><span class="badge badge-info">${docCounts[e.equipment_name] || 0} 份</span></td>
+                        <td>${e.guarantee_records ? `<span style="font-size:12px;color:var(--text);max-width:200px;display:inline-block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${escapeHTML(e.guarantee_records)}">${escapeHTML(e.guarantee_records)}</span>` : '<span style="color:var(--text-light);font-size:12px;">-</span>'}</td>
+                        <td>
+                            <button type="button" class="btn-sm btn-approve" onclick="editEquipment('${e.id}')">编辑</button>
+                            <button type="button" class="btn-sm btn-reject" onclick="deleteEquipment('${e.id}')">删除</button>
+                        </td>
+                    </tr>
+                `).join('');
+
+                renderPagination('equipment-pagination', totalItems, page, 'loadEquipmentInfoTable');
+            } catch (err) {
+                tbody.innerHTML = `<tr><td colspan="9" style="text-align:center;color:var(--danger);">加载失败：${err.message}</td></tr>`;
+            }
+        }
+
+        let pendingEquipmentImage = null;
+
+        function handleEquipmentImageSelect(input) {
+            const file = input.files[0];
+            if (!file) return;
+            if (file.size > 5 * 1024 * 1024) { showToast('图片不能超过5MB'); input.value = ''; return; }
+            document.getElementById('equipment-image-preview').textContent = '✅ ' + file.name;
+            pendingEquipmentImage = file;
+        }
+
+        function openEquipmentModal(id = null) {
+            document.getElementById('modal-equipment').classList.add('active');
+            document.getElementById('equipment-id').value = id || '';
+            document.getElementById('equipment-name').value = '';
+            document.getElementById('equipment-quantity').value = '1';
+            document.getElementById('equipment-asset').value = '';
+            document.getElementById('equipment-maintainer-name').value = '';
+            document.getElementById('equipment-maintainer-phone').value = '';
+            document.getElementById('equipment-guarantee-records').value = '';
+            document.getElementById('equipment-image-preview').textContent = '';
+            document.getElementById('equipment-image-url').value = '';
+            document.getElementById('equipment-image-input').value = '';
+            pendingEquipmentImage = null;
+            document.getElementById('equipment-modal-title').textContent = id ? '✏️ 编辑装备' : '➕ 新增装备';
+            document.getElementById('btn-equipment-save').textContent = id ? '保存修改' : '保存';
+
+            if (id) {
+                supabaseClient.from('equipment_info').select('*').eq('id', id).single().then(({ data }) => {
+                    if (data) {
+                        document.getElementById('equipment-name').value = data.equipment_name || '';
+                        document.getElementById('equipment-quantity').value = data.quantity || 1;
+                        document.getElementById('equipment-asset').value = data.asset_number || '';
+                        document.getElementById('equipment-maintainer-name').value = data.maintainer_name || '';
+                        document.getElementById('equipment-maintainer-phone').value = data.maintainer_phone || '';
+                        document.getElementById('equipment-guarantee-records').value = data.guarantee_records || '';
+                        if (data.image_url) {
+                            document.getElementById('equipment-image-preview').innerHTML = `<img src="${data.image_url}" style="max-width:100%;max-height:120px;border-radius:8px;margin-top:4px;">`;
+                            document.getElementById('equipment-image-url').value = data.image_url;
+                        }
+                    }
+                });
+            }
+        }
+
+        function closeEquipmentModal() {
+            document.getElementById('modal-equipment').classList.remove('active');
+            pendingEquipmentImage = null;
+        }
+
+        async function saveEquipment() {
+            const id = document.getElementById('equipment-id').value;
+            const equipment_name = document.getElementById('equipment-name').value.trim();
+            const quantity = parseInt(document.getElementById('equipment-quantity').value) || 1;
+            const asset_number = document.getElementById('equipment-asset').value.trim();
+            const maintainer_name = document.getElementById('equipment-maintainer-name').value.trim();
+            const maintainer_phone = document.getElementById('equipment-maintainer-phone').value.trim();
+            const guarantee_records = document.getElementById('equipment-guarantee-records').value.trim();
+            let image_url = document.getElementById('equipment-image-url').value;
+
+            if (!equipment_name || !maintainer_name || !maintainer_phone) {
+                showToast('请填写完整信息（装备名称、维护人姓名、维护人电话必填）');
+                return;
+            }
+
+            const btn = document.getElementById('btn-equipment-save');
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner"></span> 保存中...';
+
+            try {
+                if (pendingEquipmentImage) {
+                    const ext = pendingEquipmentImage.name.split('.').pop();
+                    const safeName = `eq_${Date.now()}_${Math.random().toString(36).substring(2, 8)}.${ext}`;
+                    const filePath = `equipment_images/${safeName}`;
+                    const { error: upErr } = await supabaseClient.storage.from('documents').upload(filePath, pendingEquipmentImage);
+                    if (upErr) throw upErr;
+                    const { data: urlData } = supabaseClient.storage.from('documents').getPublicUrl(filePath);
+                    image_url = urlData.publicUrl;
+                }
+
+                const payload = {
+                    equipment_name,
+                    quantity,
+                    asset_number,
+                    maintainer_name,
+                    maintainer_phone,
+                    guarantee_records,
+                    image_url
+                };
+
+                const isAdmin = currentUser.role === 'admin';
+
+                if (isAdmin) {
+                    if (id) {
+                        const { error } = await supabaseClient.from('equipment_info').update(payload).eq('id', id);
+                        if (error) throw error;
+                        showToast('装备信息已更新');
+                    } else {
+                        const { error } = await supabaseClient.from('equipment_info').insert(payload);
+                        if (error) throw error;
+                        showToast('装备信息已添加');
+                    }
+                } else {
+                    // 非管理员提交审核
+                    const { error } = await supabaseClient.from('pending_equipment_changes').insert({
+                        submitter_id: currentUser.id,
+                        submitter_name: currentUser.name || currentUser.email,
+                        action_type: id ? 'update' : 'add',
+                        equipment_id: id || null,
+                        payload: payload,
+                        status: 'pending'
+                    });
+                    if (error) throw error;
+                    showToast('您的操作已提交，请等待管理员审核');
+                }
+
+                closeEquipmentModal();
+                await loadEquipmentInfoTable();
+                if (isAdmin) await updateAdminBadges();
+            } catch (err) {
+                let errMsg = err.message;
+                if (errMsg.includes('row-level security policy')) {
+                    errMsg = '权限不足（数据库 RLS 策略拒绝）。请确保您的账号在 profiles 表中已由超级管理员设置为 admin 角色，且 equipment_info 表已开启相应的 Insert 权限。';
+                }
+                showToast('保存失败：' + errMsg);
+            } finally {
+                btn.disabled = false;
+                btn.textContent = id ? '保存修改' : '保存';
+            }
+        }
+
+        async function editEquipment(id) {
+            openEquipmentModal(id);
+        }
+
+        async function deleteEquipment(id) {
+            const isAdmin = currentUser.role === 'admin';
+            const confirmMsg = isAdmin ? '确定删除该装备信息？关联的知识库文档将保留但失去装备关联。' : '确定申请删除该装备信息？该操作需管理员审核通过。';
+            if (!confirm(confirmMsg)) return;
+
+            try {
+                if (isAdmin) {
+                    const { error } = await supabaseClient.from('equipment_info').delete().eq('id', id);
+                    if (error) throw error;
+                    showToast('已删除');
+                    await loadEquipmentInfoTable();
+                    await updateAdminBadges();
+                } else {
+                    // 非管理员提交删除审核
+                    const { data: eqData } = await supabaseClient.from('equipment_info').select('equipment_name').eq('id', id).single();
+                    const { error } = await supabaseClient.from('pending_equipment_changes').insert({
+                        submitter_id: currentUser.id,
+                        submitter_name: currentUser.name || currentUser.email,
+                        action_type: 'delete',
+                        equipment_id: id,
+                        payload: { equipment_name: eqData?.equipment_name || '未知装备' },
+                        status: 'pending'
+                    });
+                    if (error) throw error;
+                    showToast('您的操作已提交，请等待管理员审核');
+                }
+            } catch (err) {
+                showToast('操作失败：' + err.message);
+            }
+        }
+
+        // ==================== 装备变更审核 ====================
+        async function loadPendingEquipmentTable(page = 1) {
+            const tbody = document.getElementById('pending-equipment-table-body');
+            window.pendingEqCurrentPage = page;
+            try {
+                // 修改：加载所有非 pending 状态的历史记录或当前 pending
+                const { data, error } = await supabaseClient.from('pending_equipment_changes').select('*').order('created_at', { ascending: false });
+                if (error) throw error;
+                if (!data || !data.length) { 
+                    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--text-light);">暂无变更记录</td></tr>'; 
+                    document.getElementById('pending-equipment-pagination').innerHTML = '';
+                    document.getElementById('eq-pending-badge').style.display = 'none';
+                    return; 
+                }
+
+                const totalItems = data.length;
+                const startIdx = (page - 1) * PAGE_SIZE;
+                const endIdx = startIdx + PAGE_SIZE;
+                const pageData = data.slice(startIdx, endIdx);
+
+                const typeMap = { 'add': '➕ 新增', 'update': '✏️ 修改', 'delete': '❌ 删除' };
+
+                tbody.innerHTML = pageData.map(d => {
+                    const p = d.payload || {};
+                    let detailsHTML = '';
+                    if (d.action_type === 'delete') {
+                        detailsHTML = `<strong>待删装备：</strong>${escapeHTML(p.equipment_name || '未知')}`;
+                    } else {
+                        detailsHTML = `
+                            <div style="font-size:12px; line-height:1.4;">
+                                <strong>名称：</strong>${escapeHTML(p.equipment_name)}<br>
+                                <strong>数量：</strong>${p.quantity} | <strong>资产：</strong>${escapeHTML(p.asset_number || '-')}<br>
+                                <strong>维护人：</strong>${escapeHTML(p.maintainer_name)} (${escapeHTML(p.maintainer_phone)})<br>
+                                <strong>记录：</strong><small>${escapeHTML(p.guarantee_records || '-')}</small>
+                            </div>
+                        `;
+                    }
+
+                    const statusBadge = d.status === 'pending' 
+                        ? `<button type="button" class="btn-sm btn-approve" onclick="approveEquipmentChange('${d.id}')">通过</button>
+                           <button type="button" class="btn-sm btn-reject" onclick="rejectEquipmentChange('${d.id}')">驳回</button>`
+                        : `<span class="badge ${d.status==='approved'?'badge-success':'badge-danger'}">${d.status==='approved'?'已通过':'已驳回'}</span>`;
+
+                    return `
+                        <tr>
+                            <td style="white-space:nowrap;">${new Date(d.created_at).toLocaleString('zh-CN')}</td>
+                            <td>${typeMap[d.action_type] || d.action_type}</td>
+                            <td>${detailsHTML}</td>
+                            <td>${escapeHTML(d.submitter_name)}</td>
+                            <td>${statusBadge}</td>
+                        </tr>
+                    `;
+                }).join('');
+
+                renderPagination('pending-equipment-pagination', totalItems, page, 'loadPendingEquipmentTable');
+                
+                const pendingCount = data.filter(d => d.status === 'pending').length;
+                document.getElementById('eq-pending-badge').style.display = pendingCount ? 'inline' : 'none';
+                document.getElementById('eq-pending-badge').textContent = pendingCount;
+            } catch (err) { 
+                tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;color:var(--danger);">加载失败：${err.message}</td></tr>`; 
+            }
+        }
+
+        async function approveEquipmentChange(id) {
+            try {
+                const { data: change, error: fetchErr } = await supabaseClient.from('pending_equipment_changes').select('*').eq('id', id).single();
+                if (fetchErr || !change) throw new Error('变更记录不存在');
+
+                let error = null;
+                if (change.action_type === 'add') {
+                    const { error: err } = await supabaseClient.from('equipment_info').insert(change.payload);
+                    error = err;
+                } else if (change.action_type === 'update') {
+                    const { error: err } = await supabaseClient.from('equipment_info').update(change.payload).eq('id', change.equipment_id);
+                    error = err;
+                } else if (change.action_type === 'delete') {
+                    const { error: err } = await supabaseClient.from('equipment_info').delete().eq('id', change.equipment_id);
+                    error = err;
+                }
+
+                if (error) throw error;
+
+                await supabaseClient.from('pending_equipment_changes').update({ status: 'approved' }).eq('id', id);
+                showToast('已审核通过');
+                await loadPendingEquipmentTable();
+                await loadEquipmentInfoTable();
+                await updateAdminBadges();
+            } catch (err) {
+                showToast('操作失败：' + err.message);
+            }
+        }
+
+        async function rejectEquipmentChange(id) {
+            if (!confirm('确定驳回该变更申请？')) return;
+            try {
+                const { error } = await supabaseClient.from('pending_equipment_changes').update({ status: 'rejected' }).eq('id', id);
+                if (error) throw error;
+                showToast('已驳回');
+                await loadPendingEquipmentTable();
+                await updateAdminBadges();
+            } catch (err) {
+                showToast('操作失败：' + err.message);
+            }
+        }
+
+        // ==================== V22 用户审核 ====================
+        async function loadUserTable(page = 1) {
+            const tbody = document.getElementById('user-table-body');
+            window.userCurrentPage = page;
+            try {
+                const { data, error } = await supabaseClient.from('profiles').select('*').order('created_at', { ascending: false });
+                if (error) throw error;
+                if (!data || !data.length) { 
+                    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--text-light);">暂无用户</td></tr>'; 
+                    document.getElementById('user-pagination').innerHTML = '';
+                    return; 
+                }
+
+                // V29 分页
+                const totalItems = data.length;
+                const startIdx = (page - 1) * PAGE_SIZE;
+                const endIdx = startIdx + PAGE_SIZE;
+                const pageData = data.slice(startIdx, endIdx);
+
+                tbody.innerHTML = pageData.map(p => `
+                    <tr>
+                        <td>${escapeHTML(p.email || '<span style="color:#94a3b8">未记录</span>')}</td>
+                        <td>${escapeHTML(p.name || '-')}</td>
+                        <td>${escapeHTML(p.employee_id || '-')}</td>
+                        <td>${escapeHTML(p.department || '-')}</td>
+                        <td>${escapeHTML(p.phone || '-')}</td>
+                        <td><span class="badge ${p.status==='approved'?'badge-success':p.status==='pending'?'badge-warning':p.status==='disabled'?'badge-danger':'badge-danger'}">${p.status}</span></td>
+                        <td>
+                            ${p.status==='pending' ? `<button type="button" class="btn-sm btn-approve" onclick="approveUser('${p.id}')">通过</button>` : ''}
+                            <button type="button" class="btn-sm btn-reject" onclick="deleteUser('${p.id}')">注销</button>
+                        </td>
+                    </tr>
+                `).join('');
+
+                renderPagination('user-pagination', totalItems, page, 'loadUserTable');
+                const pendingCount = data.filter(p => p.status === 'pending').length;
+                document.getElementById('pending-badge').style.display = pendingCount ? 'inline' : 'none';
+                document.getElementById('pending-badge').textContent = pendingCount;
+            } catch (err) { 
+                tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;color:var(--danger);">加载失败：${err.message}</td></tr>`; 
+            }
+        }
+
+        async function approveUser(id) { 
+            try { 
+                await supabaseClient.rpc('confirm_user_email', { target_user_id: id });
+                const { error } = await supabaseClient.from('profiles').update({ status: 'approved' }).eq('id', id); 
+                if (error) throw error; 
+                showToast('已通过审核'); 
+                await loadUserTable(); 
+            } catch (err) { 
+                showToast('操作失败：' + err.message); 
+            } 
+        }
+
+        async function deleteUser(id) {
+            if (!confirm('确定注销该用户？\n\n此操作将永久删除：\n• 用户登录账号\n• 个人资料信息\n• 使用统计记录\n• 待审文档记录\n\n该手机号/邮箱可再次注册。此操作不可恢复！')) return;
+            try {
+                const { error } = await supabaseClient.rpc('delete_user_account', { target_user_id: id });
+                if (error) throw error;
+                showToast('用户已完全注销，原手机号可重新注册');
+                await loadUserTable();
+            } catch (err) {
+                showToast('注销失败：' + err.message + '（请确认已在 SQL Editor 执行 delete_user_account 函数）');
+            }
+        }
+
+        async function loadPendingDocsTable(page = 1) {
+            const tbody = document.getElementById('pending-docs-table-body');
+            window.pendingDocsCurrentPage = page;
+            try {
+                // 修改：不带 .eq('status', 'pending') 过滤，加载所有记录
+                const { data, error } = await supabaseClient.from('pending_docs').select('*').order('submitted_at', { ascending: false });
+                if (error) throw error;
+                if (!data || !data.length) { 
+                    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--text-light);">暂无记录</td></tr>'; 
+                    document.getElementById('docs-badge').style.display = 'none'; 
+                    document.getElementById('pending-docs-pagination').innerHTML = '';
+                    return; 
+                }
+
+                const userIds = [...new Set(data.map(d => d.submitter_id).filter(Boolean))];
+                let emailMap = {};
+                if (userIds.length > 0) {
+                    const { data: profiles } = await supabaseClient.from('profiles').select('id, email').in('id', userIds);
+                    if (profiles) profiles.forEach(p => { emailMap[p.id] = p.email || '-'; });
+                }
+
+                // V29 分页
+                const totalItems = data.length;
+                const startIdx = (page - 1) * PAGE_SIZE;
+                const endIdx = startIdx + PAGE_SIZE;
+                const pageData = data.slice(startIdx, endIdx);
+
+                tbody.innerHTML = pageData.map(d => {
+                    const statusBadge = d.status === 'pending' 
+                        ? `<button type="button" class="btn-sm btn-approve" onclick="approvePendingDoc('${d.id}')">入库</button>
+                           <button type="button" class="btn-sm btn-reject" onclick="rejectPendingDoc('${d.id}')">退回</button>`
+                        : `<span class="badge ${d.status==='approved'?'badge-success':'badge-danger'}">${d.status==='approved'?'已入库':'已退回'}</span>`;
+
+                    return `
+                        <tr>
+                            <td>${escapeHTML(d.file_name)}<br><small style="color:var(--text-light);">${escapeHTML(d.original_name)}</small></td>
+                            <td>${escapeHTML(d.equipment)}</td>
+                            <td>${escapeHTML(d.submitter_name)}</td>
+                            <td>${escapeHTML(d.submitter_phone)}</td>
+                            <td>${escapeHTML(emailMap[d.submitter_id] || '-')}</td>
+                            <td>${statusBadge}</td>
+                        </tr>
+                    `;
+                }).join('');
+
+                renderPagination('pending-docs-pagination', totalItems, page, 'loadPendingDocsTable');
+                const pendingCount = data.filter(d => d.status === 'pending').length;
+                document.getElementById('docs-badge').style.display = pendingCount ? 'inline' : 'none';
+                document.getElementById('docs-badge').textContent = pendingCount;
+            } catch (err) { 
+                tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;color:var(--danger);">加载失败：${err.message}</td></tr>`; 
+            }
+        }
+        async function approvePendingDoc(id) {
+            try {
+                const { data: pd, error: fetchErr } = await supabaseClient.from('pending_docs').select('*').eq('id', id).single();
+                if (fetchErr || !pd) throw new Error('文档不存在');
+
+                const { data: eqInfo } = await supabaseClient
+                    .from('equipment_info')
+                    .select('*')
+                    .eq('equipment_name', pd.equipment)
+                    .maybeSingle();
+
+                if (!eqInfo) {
+                    const { error: eqErr } = await supabaseClient.from('equipment_info').insert({
+                        equipment_name: pd.equipment,
+                        maintainer_name: pd.submitter_name,
+                        maintainer_phone: pd.submitter_phone
+                    });
+                    if (eqErr) throw eqErr;
+                }
+
+                const { error: insertErr } = await supabaseClient.from('knowledge_base').insert({
+                    title: pd.file_name, equipment: pd.equipment, file_type: pd.original_name.split('.').pop().toUpperCase(),
+                    uploader_id: pd.submitter_id, content: pd.content || '', file_path: pd.file_path, status: 'active'
+                });
+                if (insertErr) throw insertErr;
+                
+                // 修改：不物理删除，改为更新状态
+                const { error: updErr } = await supabaseClient.from('pending_docs').update({ status: 'approved' }).eq('id', id);
+                if (updErr) throw updErr;
+
+                // V30: 入库后通知上传用户
+                if (pd.submitter_id) {
+                    await supabaseClient.from('notifications').insert({
+                        title: '文档入库通知',
+                        content: '您上传的文档已入库，谢谢！',
+                        sender_id: currentUser.id,
+                        sender_name: currentUser.name || '管理员',
+                        target_all: false,
+                        target_users: [pd.submitter_id]
+                    });
+                }
+                // V30: 记录使用统计-知识库补充
+                try {
+                    await supabaseClient.from('usage_stats').insert({
+                        user_id: currentUser.id,
+                        equipment: pd.equipment || '知识库补充',
+                        intent: 'supplement',
+                        query: '管理员审核通过文档入库: ' + (pd.file_name || '').substring(0, 200)
+                    });
+                } catch (statsErr) { console.warn('统计记录失败:', statsErr); }
+
+                showToast('已入库'); await loadPendingDocsTable(); await loadKnowledgeBaseTable(); await updateKBStatus(); await loadEquipmentInfoTable(); await updateAdminBadges();
+            } catch (err) { showToast('操作失败：' + err.message); }
+        }
+        async function rejectPendingDoc(id) {
+            if (!confirm('确定退回该文档？')) return;
+            try {
+                // V30: 先获取文档信息，用于后续通知
+                const { data: pd, error: fetchErr } = await supabaseClient.from('pending_docs').select('*').eq('id', id).single();
+                if (fetchErr) console.warn('获取待审文档信息失败:', fetchErr);
+
+                // 修改：不物理删除，改为更新状态
+                const { error: updErr } = await supabaseClient.from('pending_docs').update({ status: 'rejected' }).eq('id', id);
+                if (updErr) throw updErr;
+
+                // V30: 退回后通知上传用户
+                if (pd && pd.submitter_id) {
+                    await supabaseClient.from('notifications').insert({
+                        title: '文档退回通知',
+                        content: '很遗憾，您上传的文档被退回，您可以修改后重新上传，谢谢！',
+                        sender_id: currentUser.id,
+                        sender_name: currentUser.name || '管理员',
+                        target_all: false,
+                        target_users: [pd.submitter_id]
+                    });
+                }
+                // V30: 记录使用统计-知识库补充
+                try {
+                    await supabaseClient.from('usage_stats').insert({
+                        user_id: currentUser.id,
+                        equipment: (pd && pd.equipment) ? pd.equipment : '知识库补充',
+                        intent: 'supplement',
+                        query: '管理员审核退回文档: ' + ((pd && pd.file_name) ? pd.file_name.substring(0, 200) : '')
+                    });
+                } catch (statsErr) { console.warn('统计记录失败:', statsErr); }
+
+                showToast('已退回'); await loadPendingDocsTable(); await updateAdminBadges();
+            } catch (err) { showToast('操作失败：' + err.message); }
+        }
+        async function updateAdminBadges() {
+            try {
+                const { count: userCount } = await supabaseClient.from('profiles').select('*', { count: 'exact', head: true }).eq('status', 'pending');
+                const { count: docCount } = await supabaseClient.from('pending_docs').select('*', { count: 'exact', head: true });
+                const { count: eqCount } = await supabaseClient.from('pending_equipment_changes').select('*', { count: 'exact', head: true }).eq('status', 'pending');
+                
+                document.getElementById('pending-badge').style.display = userCount ? 'inline' : 'none';
+                document.getElementById('pending-badge').textContent = userCount || 0;
+                
+                document.getElementById('docs-badge').style.display = docCount ? 'inline' : 'none';
+                document.getElementById('docs-badge').textContent = docCount || 0;
+
+                document.getElementById('eq-pending-badge').style.display = eqCount ? 'inline' : 'none';
+                document.getElementById('eq-pending-badge').textContent = eqCount || 0;
+            } catch(e) {}
+        }
+
+        // ==================== V22 使用统计（支持一般用户和管理员）====================
+        async function loadUsageStats(page = 1, troubleshootPage = 1, tokenPage = 1) {
+            const isAdmin = currentUser.role === 'admin';
+            window.usageStatsCurrentPage = page;
+            window.troubleshootCurrentPage = troubleshootPage;
+            window.tokenCurrentPage = tokenPage;
+
+            // ==================== V28 装备名称归一化映射 ====================
+            // 先加载知识库文档和装备信息，建立完整的名称映射
+            let titleToEquipment = {};
+            let equipmentSet = new Set();
+            try {
+                // 1. 从知识库加载 title -> equipment 映射
+                const { data: kbDocs, error: kbErr } = await supabaseClient.from('knowledge_base')
+                    .select('title, equipment')
+                    .eq('status', 'active');
+                if (kbErr) throw kbErr;
+                if (kbDocs) {
+                    kbDocs.forEach(doc => {
+                        const eq = (doc.equipment || '').trim();
+                        const title = (doc.title || '').trim();
+                        if (eq) equipmentSet.add(eq);
+                        if (title && eq && title !== eq) {
+                            titleToEquipment[title] = eq;
+                        }
+                    });
+                }
+                // 2. 从装备信息表加载所有已知装备名称
+                const { data: eqInfos, error: eqErr } = await supabaseClient.from('equipment_info')
+                    .select('equipment_name');
+                if (!eqErr && eqInfos) {
+                    eqInfos.forEach(e => {
+                        const name = (e.equipment_name || '').trim();
+                        if (name) equipmentSet.add(name);
+                    });
+                }
+                console.log('📚 归一化映射加载完成:', {
+                    equipmentCount: equipmentSet.size,
+                    titleMappingCount: Object.keys(titleToEquipment).length
+                });
+            } catch (e) {
+                console.warn('加载归一化映射失败:', e);
+            }
+
+            // 归一化函数：将文档标题/任意名称映射到归属装备
+            function normalizeEquipment(name) {
+                if (!name) return '未知装备';
+                const trimmed = name.trim();
+                if (trimmed === '未匹配知识库') return trimmed;
+                // 1. 本身就是已知装备名
+                if (equipmentSet.has(trimmed)) return trimmed;
+                // 2. 精确匹配到某个文档标题
+                if (titleToEquipment[trimmed]) return titleToEquipment[trimmed];
+                // 3. 尝试模糊匹配：如果 name 包含某个已知装备名，则返回该装备名
+                //    例如 "动中通培训教材" 包含 "动中通"
+                for (const eqName of equipmentSet) {
+                    if (trimmed.includes(eqName) && eqName.length >= 2) return eqName;
+                }
+                // 4. 尝试反向模糊匹配：如果某个已知装备名包含 name，则返回该装备名
+                for (const eqName of equipmentSet) {
+                    if (eqName.includes(trimmed) && trimmed.length >= 2) return eqName;
+                }
+                // 5. 尝试匹配 titleToEquipment 的键（包含关系）
+                for (const [title, eq] of Object.entries(titleToEquipment)) {
+                    if (trimmed.includes(title) || title.includes(trimmed)) return eq;
+                }
+                return trimmed;
+            }
+
+            // ===== Token 消耗统计 =====
+            try {
+                const { data: tokenData, error: tokenErr } = await supabaseClient
+                    .from('usage_stats')
+                    .select('user_id, tokens');
+                
+                if (tokenErr) throw tokenErr;
+
+                let totalTokens = 0;
+                let userTokens = {};
+                tokenData?.forEach(r => {
+                    const t = parseInt(r.tokens) || 0;
+                    totalTokens += t;
+                    userTokens[r.user_id] = (userTokens[r.user_id] || 0) + t;
+                });
+
+                const sortedUsers = Object.entries(userTokens).sort((a, b) => b[1] - a[1]);
+                const myRank = sortedUsers.findIndex(u => u[0] === currentUser.id) + 1;
+                const myTokens = userTokens[currentUser.id] || 0;
+
+                let tokenHTML = '';
+                if (isAdmin) {
+                    // 管理员看到所有人的列表和占比，每页显示10名
+                    const totalTokenUsers = sortedUsers.length;
+                    const tokenStartIdx = (tokenPage - 1) * 10;
+                    const tokenEndIdx = tokenStartIdx + 10;
+                    const pageTokenUsers = sortedUsers.slice(tokenStartIdx, tokenEndIdx);
+
+                    tokenHTML = `<div style="margin-bottom:10px; font-weight:600;">总消耗 Token：<span style="color:var(--primary); font-size:18px;">${totalTokens.toLocaleString()}</span></div>`;
+                    tokenHTML += '<table style="width:100%;font-size:12px;"><thead><tr><th>排名</th><th>用户</th><th>消耗量</th><th>占比</th></tr></thead><tbody>';
+                    
+                    // 获取用户名映射
+                    const userIds = pageTokenUsers.map(u => u[0]);
+                    let adminUserMap = {};
+                    if (userIds.length > 0) {
+                        const { data: profiles } = await supabaseClient.from('profiles').select('id, name').in('id', userIds);
+                        profiles?.forEach(p => adminUserMap[p.id] = p.name || '未命名');
+                    }
+
+                    pageTokenUsers.forEach(([uid, count], idx) => {
+                        const rank = tokenStartIdx + idx + 1;
+                        const pct = totalTokens > 0 ? ((count / totalTokens) * 100).toFixed(1) : '0.0';
+                        tokenHTML += `<tr>
+                            <td>第 ${rank} 名</td>
+                            <td>${escapeHTML(adminUserMap[uid] || uid.substring(0,8))}</td>
+                            <td>${count.toLocaleString()}</td>
+                            <td><div style="background:#f1f5f9;border-radius:3px;height:12px;position:relative;width:100px;"><div style="background:var(--primary);height:12px;border-radius:3px;width:${pct}%;"></div></div> ${pct}%</td>
+                        </tr>`;
+                    });
+                    tokenHTML += '</tbody></table>';
+                    document.getElementById('stats-token').innerHTML = tokenHTML;
+                    
+                    // 分页：使用专门的 token 分页函数
+                    renderStatsTokenPagination(totalTokenUsers, tokenPage);
+                } else {
+                    // 普通用户看到自己的总量和排名
+                    tokenHTML = `
+                        <div style="display:flex; gap:20px; align-items:center; padding:10px; background:#f8fafc; border-radius:10px;">
+                            <div style="flex:1; text-align:center;">
+                                <div style="font-size:12px; color:var(--text-light);">我的总消耗</div>
+                                <div style="font-size:24px; font-weight:700; color:var(--primary);">${myTokens.toLocaleString()}</div>
+                            </div>
+                            <div style="width:1px; height:40px; background:var(--border);"></div>
+                            <div style="flex:1; text-align:center;">
+                                <div style="font-size:12px; color:var(--text-light);">消耗排名</div>
+                                <div style="font-size:24px; font-weight:700; color:var(--success);">第 ${myRank || '-'} 名</div>
+                            </div>
+                        </div>
+                    `;
+                    document.getElementById('stats-token').innerHTML = tokenHTML;
+                    document.getElementById('stats-token-pagination').innerHTML = '';
+                }
+            } catch (err) {
+                console.error('Token 统计加载失败:', err);
+                document.getElementById('stats-token').innerHTML = '<p style="color:var(--text-light);">暂无 Token 数据</p>';
+            }
+
+            function renderStatsTokenPagination(total, current) {
+                const totalPages = Math.ceil(total / 10);
+                const container = document.getElementById('stats-token-pagination');
+                if (totalPages <= 1) { container.innerHTML = ''; return; }
+                let html = '';
+                for (let i = 1; i <= totalPages; i++) {
+                    html += `<button type="button" class="page-btn ${i===current?'active':''}" onclick="loadUsageStats(window.usageStatsCurrentPage, window.troubleshootCurrentPage, ${i})">${i}</button>`;
+                }
+                container.innerHTML = html;
+            }
+
+            // ===== 装备查询统计（独立加载）=====
+            try {
+                let eqQuery = supabaseClient.from('usage_stats').select('equipment');
+                if (!isAdmin) eqQuery = eqQuery.eq('user_id', currentUser.id);
+                const { data: eqData, error: eqErr } = await eqQuery;
+
+                if (eqErr) throw eqErr;
+
+                const eqCounts = {};
+                if (eqData) {
+                    eqData.forEach(r => {
+                        const key = normalizeEquipment(r.equipment);
+                        eqCounts[key] = (eqCounts[key] || 0) + 1;
+                    });
+                }
+                const eqTotal = eqData ? eqData.length : 0;
+                const eqSorted = Object.entries(eqCounts).sort((a, b) => b[1] - a[1]);
+                let eqHTML = '<table style="width:100%;font-size:13px;"><thead><tr><th>装备名称</th><th>查询次数</th><th>占比</th></tr></thead><tbody>';
+                eqSorted.forEach(([name, count]) => {
+                    const pct = eqTotal > 0 ? ((count / eqTotal) * 100).toFixed(1) : '0.0';
+                    eqHTML += `<tr><td>${escapeHTML(name)}</td><td>${count}</td><td><div style="background:#e2e8f0;border-radius:4px;height:16px;position:relative;"><div style="background:var(--primary);height:16px;border-radius:4px;width:${pct}%;min-width:2px;"></div><span style="position:absolute;right:4px;top:0;font-size:11px;line-height:16px;">${pct}%</span></div></td></tr>`;
+                });
+                eqHTML += '</tbody></table>';
+                if (!eqSorted.length) eqHTML = '<p style="color:var(--text-light);">暂无数据</p>';
+                document.getElementById('stats-equipment').innerHTML = eqHTML;
+                // 装备统计通常条目不多，清除分页
+                document.getElementById('stats-equipment-pagination').innerHTML = '';
+            } catch (err) {
+                console.error('装备查询统计加载失败:', err);
+                document.getElementById('stats-equipment').innerHTML = '<p style="color:var(--danger);">加载失败：' + err.message + '<br><small style="color:var(--text-light);">提示：请确认 usage_stats 表已创建</small></p>';
+            }
+
+            // ===== 类别查询统计（独立加载）=====
+            try {
+                let intentQuery = supabaseClient.from('usage_stats').select('intent');
+                if (!isAdmin) intentQuery = intentQuery.eq('user_id', currentUser.id);
+                const { data: intentData, error: intentErr } = await intentQuery;
+
+                if (intentErr) throw intentErr;
+
+                const intentCounts = {};
+                const intentLabels = {
+                    maintainer: '故障排除', beginner: '知识问答', narrator: '解说词生成',
+                    supplement: '知识库补充', report: '通讯报道撰写', general: '知识问答'
+                };
+                if (intentData) {
+                    intentData.forEach(r => {
+                        const key = intentLabels[r.intent] || (r.intent || '其他');
+                        intentCounts[key] = (intentCounts[key] || 0) + 1;
+                    });
+                }
+                const intentTotal = intentData ? intentData.length : 0;
+                const intentSorted = Object.entries(intentCounts).sort((a, b) => b[1] - a[1]);
+                let intentHTML = '<table style="width:100%;font-size:13px;"><thead><tr><th>查询类别</th><th>查询次数</th><th>占比</th></tr></thead><tbody>';
+                intentSorted.forEach(([name, count]) => {
+                    const pct = intentTotal > 0 ? ((count / intentTotal) * 100).toFixed(1) : '0.0';
+                    intentHTML += `<tr><td>${escapeHTML(name)}</td><td>${count}</td><td><div style="background:#e2e8f0;border-radius:4px;height:16px;position:relative;"><div style="background:var(--success);height:16px;border-radius:4px;width:${pct}%;min-width:2px;"></div><span style="position:absolute;right:4px;top:0;font-size:11px;line-height:16px;">${pct}%</span></div></td></tr>`;
+                });
+                intentHTML += '</tbody></table>';
+                if (!intentSorted.length) intentHTML = '<p style="color:var(--text-light);">暂无数据</p>';
+                document.getElementById('stats-intent').innerHTML = intentHTML;
+            } catch (err) {
+                console.error('类别查询统计加载失败:', err);
+                document.getElementById('stats-intent').innerHTML = '<p style="color:var(--danger);">加载失败：' + err.message + '</p>';
+            }
+
+            // ===== 故障排查记录（独立加载）=====
+            try {
+                let tsQuery = supabaseClient.from('usage_stats').select('*').eq('intent', 'maintainer');
+                if (!isAdmin) tsQuery = tsQuery.eq('user_id', currentUser.id);
+                const { data: tsData, error: tsError } = await tsQuery;
+
+                if (tsError) throw tsError;
+
+                // V28 修复：批量查询用户名称，替代显示ID
+                let userMap = {};
+                if (tsData && tsData.length) {
+                    const userIds = [...new Set(tsData.map(r => r.user_id).filter(Boolean))];
+                    if (userIds.length > 0) {
+                        const { data: profiles, error: profErr } = await supabaseClient
+                            .from('profiles')
+                            .select('id, name')
+                            .in('id', userIds);
+                        if (!profErr && profiles) {
+                            profiles.forEach(p => { userMap[p.id] = p.name || '未命名'; });
+                        }
+                    }
+                }
+
+                // V29 分页
+                const totalItems = tsData ? tsData.length : 0;
+                const tsPageSize = 10; // 固定每页显示10条
+                const startIdx = (troubleshootPage - 1) * tsPageSize;
+                const endIdx = startIdx + tsPageSize;
+                const pageData = tsData ? tsData.slice(startIdx, endIdx) : [];
+
+                let tsHTML = '<table style="width:100%;font-size:13px;"><thead><tr><th>时间</th><th>装备</th><th>查询内容</th><th>回答内容</th>' + (isAdmin ? '<th>用户</th>' : '') + '</tr></thead><tbody>';
+                if (pageData && pageData.length) {
+                    pageData.forEach(r => {
+                        const time = r.created_at ? new Date(r.created_at).toLocaleString('zh-CN') : (r.created_at === undefined ? '<span style="color:#94a3b8">未记录</span>' : '-');
+                        const normalizedEq = normalizeEquipment(r.equipment);
+                        const userName = userMap[r.user_id] || (r.user_id ? r.user_id.substring(0,8) + '...' : '-');
+                        const respText = escapeHTML(r.response || '-');
+                        const respShort = respText.length > 20 ? respText.substring(0, 20) + '...' : respText;
+                        const respId = 'ts_' + (r.id || Math.random().toString(36).substring(2, 9));
+                        const hasLongResp = respText.length > 20;
+                        const queryText = escapeHTML(r.query || '-');
+                        const queryShort = queryText.length > 20 ? queryText.substring(0, 20) + '...' : queryText;
+                        const queryId = 'q_' + (r.id || Math.random().toString(36).substring(2, 9));
+                        const hasLongQuery = queryText.length > 20;
+                        tsHTML += `<tr>
+                            <td style="white-space:nowrap;">${time}</td>
+                            <td>${escapeHTML(normalizedEq)}</td>
+                            <td style="word-break:break-word; line-height:1.6;">
+                                <div id="query-short-${queryId}">${queryShort}</div>
+                                <div id="query-full-${queryId}" style="display:none;">${queryText}</div>
+                                ${hasLongQuery ? `<button type="button" id="query-btn-${queryId}" style="margin-top:6px; padding:3px 10px; font-size:11px; background:var(--primary); color:#fff; border:none; border-radius:6px; cursor:pointer; transition:var(--transition);" onclick="toggleResponseExpand('${queryId}')">展开</button>` : ''}
+                            </td>
+                            <td style="word-break:break-word; line-height:1.6;">
+                                <div id="resp-short-${respId}">${respShort}</div>
+                                <div id="resp-full-${respId}" style="display:none;">${respText}</div>
+                                ${hasLongResp ? `<button type="button" id="resp-btn-${respId}" style="margin-top:6px; padding:3px 10px; font-size:11px; background:var(--primary); color:#fff; border:none; border-radius:6px; cursor:pointer; transition:var(--transition);" onclick="toggleResponseExpand('${respId}')">展开</button>` : ''}
+                            </td>
+                            ${isAdmin ? `<td>${escapeHTML(userName)}</td>` : ''}
+                        </tr>`;
+                    });
+                } else {
+                    tsHTML += `<tr><td colspan="${isAdmin ? 5 : 4}" style="text-align:center;color:var(--text-light);">暂无故障排查记录</td></tr>`;
+                }
+                tsHTML += '</tbody></table>';
+                document.getElementById('stats-troubleshoot').innerHTML = tsHTML;
+                
+                // 使用专门的故障排查分页渲染
+                renderTroubleshootPagination(totalItems, troubleshootPage);
+            } catch (err) {
+                console.error('故障排查记录加载失败:', err);
+                document.getElementById('stats-troubleshoot').innerHTML = '<p style="color:var(--danger);">加载失败：' + err.message + '</p>';
+            }
+        }
+
+        function renderTroubleshootPagination(total, current) {
+            const totalPages = Math.ceil(total / 10);
+            const container = document.getElementById('stats-troubleshoot-pagination');
+            if (totalPages <= 1) { container.innerHTML = ''; return; }
+            let html = '';
+            for (let i = 1; i <= totalPages; i++) {
+                html += `<button type="button" class="page-btn ${i===current?'active':''}" onclick="loadUsageStats(window.usageStatsCurrentPage, ${i}, window.tokenCurrentPage)">${i}</button>`;
+            }
+            container.innerHTML = html;
+        }
+
+        // ==================== V22 通知与反馈 ====================
+        async function loadNotificationsPanel() {
+            const isAdmin = currentUser.role === 'admin';
+            document.getElementById('admin-notify-section').style.display = isAdmin ? 'block' : 'none';
+            document.getElementById('user-feedback-section').style.display = 'block'; // 所有用户都能提交反馈
+
+            await loadNotifications();
+            await loadFeedbackList();
+
+            if (isAdmin) {
+                await loadNotifyUserList();
+            }
+        }
+
+        async function loadNotifyUserList() {
+            const container = document.getElementById('notify-user-list');
+            try {
+                const { data, error } = await supabaseClient.from('profiles').select('id, name, phone, email').eq('status', 'approved');
+                if (error) throw error;
+                if (!data || !data.length) { container.innerHTML = '<p style="color:var(--text-light);font-size:12px;">暂无已审核用户</p>'; return; }
+
+                container.innerHTML = `
+                    <div class="notify-user-item" style="border-bottom:1px solid var(--border);padding-bottom:8px;margin-bottom:4px;">
+                        <input type="checkbox" id="notify-check-all" onchange="toggleAllNotifyUsers(this)">
+                        <label for="notify-check-all" style="cursor:pointer;font-weight:600;">全选/取消全选</label>
+                    </div>
+                    ${data.map(u => `
+                        <div class="notify-user-item">
+                            <input type="checkbox" class="notify-user-checkbox" value="${u.id}" data-name="${escapeHTML(u.name || '')}">
+                            <span>${escapeHTML(u.name || '未命名')} (${escapeHTML(u.phone || u.email || '')})</span>
+                        </div>
+                    `).join('')}
+                `;
+            } catch (err) {
+                container.innerHTML = '<p style="color:var(--danger);font-size:12px;">加载用户列表失败</p>';
+            }
+        }
+
+        function toggleNotifyTarget() {
+            const allChecked = document.getElementById('notify-all').checked;
+            document.getElementById('notify-user-select').style.display = allChecked ? 'none' : 'block';
+        }
+
+        function toggleAllNotifyUsers(checkbox) {
+            const boxes = document.querySelectorAll('.notify-user-checkbox');
+            boxes.forEach(b => b.checked = checkbox.checked);
+        }
+
+        async function sendNotification() {
+            const title = document.getElementById('notify-title').value.trim();
+            const content = document.getElementById('notify-content').value.trim();
+            const targetAll = document.getElementById('notify-all').checked;
+
+            if (!title || !content) { showToast('请填写标题和内容'); return; }
+
+            let targetUsers = [];
+            if (!targetAll) {
+                const checked = document.querySelectorAll('.notify-user-checkbox:checked');
+                checked.forEach(c => targetUsers.push(c.value));
+                if (targetUsers.length === 0) { showToast('请选择至少一个接收用户'); return; }
+            }
+
+            const btn = document.getElementById('btn-send-notify');
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner"></span> 发送中...';
+
+            try {
+                const { error } = await supabaseClient.from('notifications').insert({
+                    title,
+                    content,
+                    sender_id: currentUser.id,
+                    sender_name: currentUser.name || currentUser.email || '管理员',
+                    target_all: targetAll,
+                    target_users: targetAll ? null : targetUsers
+                });
+                if (error) throw error;
+                showToast('通知已发送');
+                document.getElementById('notify-title').value = '';
+                document.getElementById('notify-content').value = '';
+                await loadNotifications();
+            } catch (err) {
+                showToast('发送失败：' + err.message + '（请确认已创建 notifications 表）');
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '发送通知';
+            }
+        }
+
+        async function loadNotifications(page = 1) {
+            const container = document.getElementById('notifications-list');
+            window.notificationsCurrentPage = page;
+            try {
+                const isAdmin = currentUser.role === 'admin';
+                let query = supabaseClient.from('notifications').select('*').order('created_at', { ascending: false });
+
+                if (!isAdmin) {
+                    query = query.or(`target_all.eq.true,target_users.cs.{${currentUser.id}}`);
+                }
+
+                const { data, error } = await query;
+                if (error) throw error;
+
+                if (!data || !data.length) {
+                    container.innerHTML = '<p style="color:var(--text-light);font-size:13px;">暂无通知</p>';
+                    document.getElementById('notifications-pagination').innerHTML = '';
+                    return;
+                }
+
+                // V29 分页
+                const totalItems = data.length;
+                const startIdx = (page - 1) * PAGE_SIZE;
+                const endIdx = startIdx + PAGE_SIZE;
+                const pageData = data.slice(startIdx, endIdx);
+
+                container.innerHTML = pageData.map(n => {
+                    const time = n.created_at ? new Date(n.created_at).toLocaleString('zh-CN') : '-';
+                    const isUnread = !(n.read_by && n.read_by.includes(currentUser.id));
+                    return `
+                        <div class="notification-card ${isUnread ? 'unread' : ''}" data-id="${n.id}">
+                            <div class="notify-title">${escapeHTML(n.title)} ${n.target_all ? '<span class="badge badge-info" style="font-size:10px;">全员</span>' : '<span class="badge badge-warning" style="font-size:10px;">指定用户</span>'}</div>
+                            <div class="notify-meta">发送人：${escapeHTML(n.sender_name || '管理员')} · ${time}</div>
+                            <div class="notify-content">${escapeHTML(n.content).replace(/\n/g, '<br>')}</div>
+                            ${isUnread ? `<button type="button" class="btn-sm btn-approve" style="margin-top:8px;" onclick="markNotificationRead('${n.id}')">标记已读</button>` : '<span style="font-size:11px;color:var(--text-light);margin-top:8px;display:inline-block;">✅ 已读</span>'}
+                        </div>
+                    `;
+                }).join('');
+
+                renderPagination('notifications-pagination', totalItems, page, 'loadNotifications');
+
+                const unreadCount = data.filter(n => !(n.read_by && n.read_by.includes(currentUser.id))).length;
+                document.getElementById('notify-badge').style.display = unreadCount ? 'inline' : 'none';
+                document.getElementById('notify-badge').textContent = unreadCount;
+            } catch (err) {
+                container.innerHTML = '<p style="color:var(--danger);font-size:13px;">加载通知失败：' + err.message + '（请确认已创建 notifications 表）</p>';
+            }
+        }
+async function markNotificationRead(id) {
+            try {
+                const { data: n } = await supabaseClient.from('notifications').select('read_by').eq('id', id).single();
+                let readBy = n?.read_by || [];
+                if (!readBy.includes(currentUser.id)) readBy.push(currentUser.id);
+
+                const { error } = await supabaseClient.from('notifications').update({ read_by: readBy }).eq('id', id);
+                if (error) throw error;
+                await loadNotifications();
+            } catch (err) {
+                console.error('标记已读失败:', err);
+            }
+        }
+
+        async function submitFeedback() {
+            const content = document.getElementById('feedback-content').value.trim();
+            if (!content) { showToast('请填写反馈内容'); return; }
+
+            const btn = document.getElementById('btn-submit-feedback');
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner"></span> 提交中...';
+
+            try {
+                const { error } = await supabaseClient.from('feedback').insert({
+                    user_id: currentUser.id,
+                    user_name: currentUser.name || currentUser.phone || currentUser.email || '匿名用户',
+                    content
+                });
+                if (error) throw error;
+                showToast('反馈已提交');
+                document.getElementById('feedback-content').value = '';
+                await loadFeedbackList();
+            } catch (err) {
+                showToast('提交失败：' + err.message + '（请确认已创建 feedback 表）');
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '提交反馈';
+            }
+        }
+
+        async function loadFeedbackList(page = 1) {
+            const container = document.getElementById('feedback-list');
+            window.feedbackCurrentPage = page;
+            try {
+                const isAdmin = currentUser.role === 'admin';
+                let query = supabaseClient.from('feedback').select('*').order('created_at', { ascending: false });
+                if (!isAdmin) query = query.eq('user_id', currentUser.id);
+
+                const { data, error } = await query;
+                if (error) throw error;
+
+                if (!data || !data.length) {
+                    container.innerHTML = '<p style="color:var(--text-light);font-size:13px;">暂无反馈记录</p>';
+                    document.getElementById('feedback-pagination').innerHTML = '';
+                    return;
+                }
+
+                // V29 分页
+                const totalItems = data.length;
+                const startIdx = (page - 1) * PAGE_SIZE;
+                const endIdx = startIdx + PAGE_SIZE;
+                const pageData = data.slice(startIdx, endIdx);
+
+                container.innerHTML = pageData.map(f => {
+                    const time = f.created_at ? new Date(f.created_at).toLocaleString('zh-CN') : '-';
+                    return `
+                        <div class="feedback-card">
+                            <div class="fb-user">${escapeHTML(f.user_name || '匿名')} ${isAdmin ? `<span style="font-size:11px;color:var(--text-light);">(${f.user_id?.substring(0,8)}...)</span>` : ''}</div>
+                            <div class="fb-meta">${time}</div>
+                            <div class="fb-content">${escapeHTML(f.content).replace(/\n/g, '<br>')}</div>
+                        </div>
+                    `;
+                }).join('');
+
+                renderPagination('feedback-pagination', totalItems, page, 'loadFeedbackList');
+            } catch (err) {
+                container.innerHTML = '<p style="color:var(--danger);font-size:13px;">加载反馈失败：' + err.message + '（请确认已创建 feedback 表）</p>';
+            }
+        }
+function toggleResponseExpand(rowId) {
+            // 同时支持 resp-（回答内容）和 query-（查询内容）两种前缀
+            let shortEl = document.getElementById('resp-short-' + rowId) || document.getElementById('query-short-' + rowId);
+            let fullEl = document.getElementById('resp-full-' + rowId) || document.getElementById('query-full-' + rowId);
+            let btnEl = document.getElementById('resp-btn-' + rowId) || document.getElementById('query-btn-' + rowId);
+            if (shortEl && fullEl && btnEl) {
+                if (fullEl.style.display === 'none') {
+                    fullEl.style.display = 'block';
+                    shortEl.style.display = 'none';
+                    btnEl.textContent = '收起';
+                } else {
+                    fullEl.style.display = 'none';
+                    shortEl.style.display = 'block';
+                    btnEl.textContent = '展开';
+                }
+            }
+        }
+        function showToast(msg) { const toast = document.getElementById('toast'); toast.textContent = msg; toast.classList.add('show'); setTimeout(() => toast.classList.remove('show'), 3000); }
+        init();
+    </script>
+</body>
+</html>
