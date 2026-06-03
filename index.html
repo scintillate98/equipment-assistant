@@ -557,7 +557,9 @@
             <input type="text" id="equipment-asset" placeholder="资产编号/车牌号">
             <input type="text" id="equipment-maintainer-name" placeholder="装备维护人姓名 *" required>
             <input type="text" id="equipment-maintainer-phone" placeholder="装备维护人电话 *" required>
-            <textarea id="equipment-guarantee-records" placeholder="重大保障记录（可选）" rows="3" style="width:100%;padding:10px 14px;border:2px solid var(--border);border-radius:10px;font-size:14px;margin-top:10px;outline:none;font-family:inherit;resize:vertical;"></textarea>
+            <input type="date" id="equipment-guarantee-date" placeholder="保障日期" style="margin-top:10px;">
+            <input type="text" id="equipment-guarantee-location" placeholder="保障地点" style="margin-top:10px;">
+            <textarea id="equipment-guarantee-records" placeholder="重大保障记录（可选）" rows="2" style="width:100%;padding:10px 14px;border:2px solid var(--border);border-radius:10px;font-size:14px;margin-top:10px;outline:none;font-family:inherit;resize:vertical;"></textarea>
             <button type="button" class="btn btn-primary" onclick="saveEquipment()" id="btn-equipment-save">保存</button>
         </div>
     </div>
@@ -2135,7 +2137,34 @@
                         <td>${escapeHTML(e.maintainer_name)}</td>
                         <td>${escapeHTML(e.maintainer_phone)}</td>
                         <td><span class="badge badge-info">${docCounts[e.equipment_name] || 0} 份</span></td>
-                        <td>${e.guarantee_records ? `<span style="font-size:12px;color:var(--text);max-width:200px;display:inline-block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${escapeHTML(e.guarantee_records)}">${escapeHTML(e.guarantee_records)}</span>` : '<span style="color:var(--text-light);font-size:12px;">-</span>'}</td>
+                        <td>
+                        ${e.guarantee_records ? `
+                            <div style="font-size:12px;">
+                                <div id="gr-short-${e.id}" style="line-height:1.5;">
+                                    ${(() => {
+                                        const parts = e.guarantee_records.split('|');
+                                        const date = parts[0] || '-';
+                                        const loc = parts[1] || '-';
+                                        const content = parts[2] || '-';
+                                        const shortContent = content.length > 15 ? content.substring(0, 15) + '...' : content;
+                                        return `<span style="color:var(--text-light);">${date}</span> <span style="color:var(--primary);">[${loc}]</span> ${shortContent}`;
+                                    })()}
+                                </div>
+                                <div id="gr-full-${e.id}" style="display:none; line-height:1.6; margin-top:4px; padding-top:4px; border-top:1px dashed var(--border);">
+                                    ${(() => {
+                                        const parts = e.guarantee_records.split('|');
+                                        const date = parts[0] || '-';
+                                        const loc = parts[1] || '-';
+                                        const content = parts[2] || '-';
+                                        return `<div><strong style="color:var(--text-light);">日期：</strong>${date}</div>
+                                                <div><strong style="color:var(--text-light);">地点：</strong>${loc}</div>
+                                                <div><strong style="color:var(--text-light);">记录：</strong>${content}</div>`;
+                                    })()}
+                                </div>
+                                <button type="button" id="gr-btn-${e.id}" style="margin-top:6px; padding:2px 8px; font-size:11px; background:var(--primary); color:#fff; border:none; border-radius:4px; cursor:pointer;" onclick="toggleGuaranteeExpand('${e.id}')">展开</button>
+                            </div>
+                        ` : '<span style="color:var(--text-light);font-size:12px;">-</span>'}
+                    </td>
                         <td>
                             <button type="button" class="btn-sm btn-approve" onclick="editEquipment('${e.id}')">编辑</button>
                             <button type="button" class="btn-sm btn-reject" onclick="deleteEquipment('${e.id}')">删除</button>
@@ -2167,6 +2196,8 @@
             document.getElementById('equipment-asset').value = '';
             document.getElementById('equipment-maintainer-name').value = '';
             document.getElementById('equipment-maintainer-phone').value = '';
+            document.getElementById('equipment-guarantee-date').value = '';
+            document.getElementById('equipment-guarantee-location').value = '';
             document.getElementById('equipment-guarantee-records').value = '';
             document.getElementById('equipment-image-preview').textContent = '';
             document.getElementById('equipment-image-url').value = '';
@@ -2183,7 +2214,17 @@
                         document.getElementById('equipment-asset').value = data.asset_number || '';
                         document.getElementById('equipment-maintainer-name').value = data.maintainer_name || '';
                         document.getElementById('equipment-maintainer-phone').value = data.maintainer_phone || '';
-                        document.getElementById('equipment-guarantee-records').value = data.guarantee_records || '';
+                        
+                        if (data.guarantee_records) {
+                            const parts = data.guarantee_records.split('|');
+                            const guaranteeDate = parts[0] || '';
+                            const guaranteeLoc = parts[1] || '';
+                            const guaranteeContent = parts[2] || '';
+                            document.getElementById('equipment-guarantee-date').value = guaranteeDate === '-' ? '' : guaranteeDate;
+                            document.getElementById('equipment-guarantee-location').value = guaranteeLoc === '-' ? '' : guaranteeLoc;
+                            document.getElementById('equipment-guarantee-records').value = guaranteeContent === '-' ? '' : guaranteeContent;
+                        }
+                        
                         if (data.image_url) {
                             document.getElementById('equipment-image-preview').innerHTML = `<img src="${data.image_url}" style="max-width:100%;max-height:120px;border-radius:8px;margin-top:4px;">`;
                             document.getElementById('equipment-image-url').value = data.image_url;
@@ -2205,7 +2246,9 @@
             const asset_number = document.getElementById('equipment-asset').value.trim();
             const maintainer_name = document.getElementById('equipment-maintainer-name').value.trim();
             const maintainer_phone = document.getElementById('equipment-maintainer-phone').value.trim();
-            const guarantee_records = document.getElementById('equipment-guarantee-records').value.trim();
+            const guarantee_date = document.getElementById('equipment-guarantee-date').value;
+            const guarantee_location = document.getElementById('equipment-guarantee-location').value.trim();
+            const guarantee_content = document.getElementById('equipment-guarantee-records').value.trim();
             let image_url = document.getElementById('equipment-image-url').value;
 
             if (!equipment_name || !maintainer_name || !maintainer_phone) {
@@ -2226,6 +2269,11 @@
                     if (upErr) throw upErr;
                     const { data: urlData } = supabaseClient.storage.from('documents').getPublicUrl(filePath);
                     image_url = urlData.publicUrl;
+                }
+
+                let guarantee_records = '';
+                if (guarantee_date || guarantee_location || guarantee_content) {
+                    guarantee_records = `${guarantee_date || '-'}|${guarantee_location || '-'}|${guarantee_content || '-'}`;
                 }
 
                 const payload = {
@@ -2417,6 +2465,18 @@
                 await updateAdminBadges();
             } catch (err) {
                 showToast('操作失败：' + err.message);
+            }
+        }
+
+        async function deleteTroubleshootRecord(id) {
+            if (!confirm('确定删除该故障排查记录？')) return;
+            try {
+                const { error } = await supabaseClient.from('usage_stats').delete().eq('id', id);
+                if (error) throw error;
+                showToast('已删除');
+                await loadUsageStats(window.usageStatsCurrentPage, window.troubleshootCurrentPage, window.tokenCurrentPage);
+            } catch (err) {
+                showToast('删除失败：' + err.message);
             }
         }
 
@@ -2750,7 +2810,6 @@
 
                 let tokenHTML = '';
                 if (isAdmin) {
-                    // 管理员看到所有人的列表和占比，每页显示10名
                     const totalTokenUsers = sortedUsers.length;
                     const tokenStartIdx = (tokenPage - 1) * 10;
                     const tokenEndIdx = tokenStartIdx + 10;
@@ -2759,7 +2818,6 @@
                     tokenHTML = `<div style="margin-bottom:10px; font-weight:600;">总消耗 Token：<span style="color:var(--primary); font-size:18px;">${totalTokens.toLocaleString()}</span></div>`;
                     tokenHTML += '<table style="width:100%;font-size:12px;"><thead><tr><th>排名</th><th>用户</th><th>消耗量</th><th>占比</th></tr></thead><tbody>';
                     
-                    // 获取用户名映射
                     const userIds = pageTokenUsers.map(u => u[0]);
                     let adminUserMap = {};
                     if (userIds.length > 0) {
@@ -2780,20 +2838,13 @@
                     tokenHTML += '</tbody></table>';
                     document.getElementById('stats-token').innerHTML = tokenHTML;
                     
-                    // 分页：使用专门的 token 分页函数
                     renderStatsTokenPagination(totalTokenUsers, tokenPage);
                 } else {
-                    // 普通用户看到自己的总量和排名
                     tokenHTML = `
-                        <div style="display:flex; gap:20px; align-items:center; padding:10px; background:#f8fafc; border-radius:10px;">
-                            <div style="flex:1; text-align:center;">
+                        <div style="padding:10px; background:#f8fafc; border-radius:10px;">
+                            <div style="text-align:center;">
                                 <div style="font-size:12px; color:var(--text-light);">我的总消耗</div>
-                                <div style="font-size:24px; font-weight:700; color:var(--primary);">${myTokens.toLocaleString()}</div>
-                            </div>
-                            <div style="width:1px; height:40px; background:var(--border);"></div>
-                            <div style="flex:1; text-align:center;">
-                                <div style="font-size:12px; color:var(--text-light);">消耗排名</div>
-                                <div style="font-size:24px; font-weight:700; color:var(--success);">第 ${myRank || '-'} 名</div>
+                                <div style="font-size:28px; font-weight:700; color:var(--primary);">${myTokens.toLocaleString()}</div>
                             </div>
                         </div>
                     `;
@@ -2912,7 +2963,7 @@
                 const endIdx = startIdx + tsPageSize;
                 const pageData = tsData ? tsData.slice(startIdx, endIdx) : [];
 
-                let tsHTML = '<table style="width:100%;font-size:13px;"><thead><tr><th>时间</th><th>装备</th><th>查询内容</th><th>回答内容</th>' + (isAdmin ? '<th>用户</th>' : '') + '</tr></thead><tbody>';
+                let tsHTML = '<table style="width:100%;font-size:13px;"><thead><tr><th>时间</th><th>装备</th><th>查询内容</th><th>回答内容</th>' + (isAdmin ? '<th>用户</th><th>操作</th>' : '') + '</tr></thead><tbody>';
                 if (pageData && pageData.length) {
                     pageData.forEach(r => {
                         const time = r.created_at ? new Date(r.created_at).toLocaleString('zh-CN') : (r.created_at === undefined ? '<span style="color:#94a3b8">未记录</span>' : '-');
@@ -2939,11 +2990,11 @@
                                 <div id="resp-full-${respId}" style="display:none;">${respText}</div>
                                 ${hasLongResp ? `<button type="button" id="resp-btn-${respId}" style="margin-top:6px; padding:3px 10px; font-size:11px; background:var(--primary); color:#fff; border:none; border-radius:6px; cursor:pointer; transition:var(--transition);" onclick="toggleResponseExpand('${respId}')">展开</button>` : ''}
                             </td>
-                            ${isAdmin ? `<td>${escapeHTML(userName)}</td>` : ''}
+                            ${isAdmin ? `<td>${escapeHTML(userName)}</td><td><button type="button" class="btn-sm btn-reject" onclick="deleteTroubleshootRecord('${r.id}')">删除</button></td>` : ''}
                         </tr>`;
                     });
                 } else {
-                    tsHTML += `<tr><td colspan="${isAdmin ? 5 : 4}" style="text-align:center;color:var(--text-light);">暂无故障排查记录</td></tr>`;
+                    tsHTML += `<tr><td colspan="${isAdmin ? 6 : 4}" style="text-align:center;color:var(--text-light);">暂无故障排查记录</td></tr>`;
                 }
                 tsHTML += '</tbody></table>';
                 document.getElementById('stats-troubleshoot').innerHTML = tsHTML;
@@ -3187,6 +3238,22 @@ function toggleResponseExpand(rowId) {
             let shortEl = document.getElementById('resp-short-' + rowId) || document.getElementById('query-short-' + rowId);
             let fullEl = document.getElementById('resp-full-' + rowId) || document.getElementById('query-full-' + rowId);
             let btnEl = document.getElementById('resp-btn-' + rowId) || document.getElementById('query-btn-' + rowId);
+            if (shortEl && fullEl && btnEl) {
+                if (fullEl.style.display === 'none') {
+                    fullEl.style.display = 'block';
+                    shortEl.style.display = 'none';
+                    btnEl.textContent = '收起';
+                } else {
+                    fullEl.style.display = 'none';
+                    shortEl.style.display = 'block';
+                    btnEl.textContent = '展开';
+                }
+            }
+        }
+        function toggleGuaranteeExpand(id) {
+            const shortEl = document.getElementById('gr-short-' + id);
+            const fullEl = document.getElementById('gr-full-' + id);
+            const btnEl = document.getElementById('gr-btn-' + id);
             if (shortEl && fullEl && btnEl) {
                 if (fullEl.style.display === 'none') {
                     fullEl.style.display = 'block';
