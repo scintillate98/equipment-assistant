@@ -557,9 +557,14 @@
             <input type="text" id="equipment-asset" placeholder="资产编号/车牌号">
             <input type="text" id="equipment-maintainer-name" placeholder="装备维护人姓名 *" required>
             <input type="text" id="equipment-maintainer-phone" placeholder="装备维护人电话 *" required>
-            <input type="date" id="equipment-guarantee-date" placeholder="保障日期" style="margin-top:10px;">
-            <input type="text" id="equipment-guarantee-location" placeholder="保障地点" style="margin-top:10px;">
-            <textarea id="equipment-guarantee-records" placeholder="重大保障记录（可选）" rows="2" style="width:100%;padding:10px 14px;border:2px solid var(--border);border-radius:10px;font-size:14px;margin-top:10px;outline:none;font-family:inherit;resize:vertical;"></textarea>
+            <div style="margin-top:10px;">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+                    <span style="font-size:14px;font-weight:500;">重大保障记录</span>
+                    <button type="button" class="btn btn-sm btn-primary" onclick="addGuaranteeRecord()" style="padding:4px 12px;font-size:12px;">+ 添加记录</button>
+                </div>
+                <div id="guarantee-records-container" style="min-height:100px;border:2px dashed var(--border);border-radius:10px;padding:10px;"></div>
+                <input type="hidden" id="equipment-guarantee-records">
+            </div>
             <button type="button" class="btn btn-primary" onclick="saveEquipment()" id="btn-equipment-save">保存</button>
         </div>
     </div>
@@ -2137,34 +2142,7 @@
                         <td>${escapeHTML(e.maintainer_name)}</td>
                         <td>${escapeHTML(e.maintainer_phone)}</td>
                         <td><span class="badge badge-info">${docCounts[e.equipment_name] || 0} 份</span></td>
-                        <td>
-                        ${e.guarantee_records ? `
-                            <div style="font-size:12px;">
-                                <div id="gr-short-${e.id}" style="line-height:1.5;">
-                                    ${(() => {
-                                        const parts = e.guarantee_records.split('|');
-                                        const date = parts[0] || '-';
-                                        const loc = parts[1] || '-';
-                                        const content = parts[2] || '-';
-                                        const shortContent = content.length > 15 ? content.substring(0, 15) + '...' : content;
-                                        return `<span style="color:var(--text-light);">${date}</span> <span style="color:var(--primary);">[${loc}]</span> ${shortContent}`;
-                                    })()}
-                                </div>
-                                <div id="gr-full-${e.id}" style="display:none; line-height:1.6; margin-top:4px; padding-top:4px; border-top:1px dashed var(--border);">
-                                    ${(() => {
-                                        const parts = e.guarantee_records.split('|');
-                                        const date = parts[0] || '-';
-                                        const loc = parts[1] || '-';
-                                        const content = parts[2] || '-';
-                                        return `<div><strong style="color:var(--text-light);">日期：</strong>${date}</div>
-                                                <div><strong style="color:var(--text-light);">地点：</strong>${loc}</div>
-                                                <div><strong style="color:var(--text-light);">记录：</strong>${content}</div>`;
-                                    })()}
-                                </div>
-                                <button type="button" id="gr-btn-${e.id}" style="margin-top:6px; padding:2px 8px; font-size:11px; background:var(--primary); color:#fff; border:none; border-radius:4px; cursor:pointer;" onclick="toggleGuaranteeExpand('${e.id}')">展开</button>
-                            </div>
-                        ` : '<span style="color:var(--text-light);font-size:12px;">-</span>'}
-                    </td>
+                        <td>${renderGuaranteeRecords(e.guarantee_records)}</td>
                         <td>
                             <button type="button" class="btn-sm btn-approve" onclick="editEquipment('${e.id}')">编辑</button>
                             <button type="button" class="btn-sm btn-reject" onclick="deleteEquipment('${e.id}')">删除</button>
@@ -2188,6 +2166,171 @@
             pendingEquipmentImage = file;
         }
 
+        let guaranteeRecordCounter = 0;
+
+        function addGuaranteeRecord(startDate = '', endDate = '', location = '', content = '') {
+            guaranteeRecordCounter++;
+            const container = document.getElementById('guarantee-records-container');
+            const recordHTML = `
+                <div class="guarantee-record" style="background:#f8fafc;border-radius:8px;padding:12px;margin-bottom:8px;">
+                    <div style="display:flex;gap:10px;margin-bottom:8px;">
+                        <input type="date" class="guarantee-start-date" value="${startDate}" placeholder="开始日期" style="flex:1;padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:12px;">
+                        <span style="display:flex;align-items:center;color:var(--text-light);">~</span>
+                        <input type="date" class="guarantee-end-date" value="${endDate}" placeholder="结束日期" style="flex:1;padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:12px;">
+                    </div>
+                    <input type="text" class="guarantee-location" value="${location}" placeholder="保障地点" style="width:100%;padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:12px;margin-bottom:8px;">
+                    <textarea class="guarantee-content" placeholder="保障记录内容" rows="2" style="width:100%;padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:12px;resize:vertical;">${content}</textarea>
+                    <button type="button" onclick="removeGuaranteeRecord(this)" style="margin-top:8px;padding:4px 10px;font-size:12px;color:var(--danger);border:1px solid var(--danger);border-radius:4px;background:none;cursor:pointer;">删除</button>
+                </div>
+            `;
+            container.innerHTML += recordHTML;
+            updateGuaranteeRecordsHidden();
+        }
+
+        function removeGuaranteeRecord(btn) {
+            btn.parentElement.remove();
+            updateGuaranteeRecordsHidden();
+        }
+
+        function updateGuaranteeRecordsHidden() {
+            const records = [];
+            document.querySelectorAll('.guarantee-record').forEach(record => {
+                const startDate = record.querySelector('.guarantee-start-date').value;
+                const endDate = record.querySelector('.guarantee-end-date').value;
+                const location = record.querySelector('.guarantee-location').value.trim();
+                const content = record.querySelector('.guarantee-content').value.trim();
+                if (startDate || endDate || location || content) {
+                    records.push({ startDate, endDate, location, content });
+                }
+            });
+            document.getElementById('equipment-guarantee-records').value = JSON.stringify(records);
+        }
+
+        function clearGuaranteeRecords() {
+            document.getElementById('guarantee-records-container').innerHTML = '';
+            document.getElementById('equipment-guarantee-records').value = '';
+        }
+
+        function parseGuaranteeRecords(jsonStr) {
+            clearGuaranteeRecords();
+            if (!jsonStr) return;
+            try {
+                const records = JSON.parse(jsonStr);
+                if (Array.isArray(records)) {
+                    records.forEach(r => {
+                        addGuaranteeRecord(r.startDate || '', r.endDate || '', r.location || '', r.content || '');
+                    });
+                } else if (typeof records === 'object' && records.startDate) {
+                    addGuaranteeRecord(records.startDate || '', records.endDate || '', records.location || '', records.content || '');
+                } else if (typeof jsonStr === 'string' && !jsonStr.startsWith('[')) {
+                    const parts = jsonStr.split('|');
+                    if (parts.length >= 3) {
+                        addGuaranteeRecord(parts[0] || '', parts[1] || '', parts[2] || '', parts.slice(3).join('|') || '');
+                    } else if (jsonStr) {
+                        addGuaranteeRecord('', '', '', jsonStr);
+                    }
+                }
+            } catch (e) {
+                if (jsonStr && !jsonStr.startsWith('[')) {
+                    addGuaranteeRecord('', '', '', jsonStr);
+                }
+            }
+        }
+
+        function renderGuaranteeRecords(recordsJson) {
+            if (!recordsJson) return '<span style="color:var(--text-light);font-size:12px;">-</span>';
+            
+            let records = [];
+            try {
+                records = JSON.parse(recordsJson);
+            } catch (e) {
+                if (typeof recordsJson === 'string') {
+                    const parts = recordsJson.split('|');
+                    if (parts.length >= 3) {
+                        records = [{ startDate: parts[0], endDate: parts[1], location: parts[2], content: parts.slice(3).join('|') }];
+                    } else {
+                        records = [{ content: recordsJson }];
+                    }
+                }
+            }
+            
+            if (!Array.isArray(records)) {
+                records = [records];
+            }
+            
+            if (records.length === 0) return '<span style="color:var(--text-light);font-size:12px;">-</span>';
+            
+            const uniqueId = `guarantee-${Math.random().toString(36).substring(2, 8)}`;
+            const isSingle = records.length === 1;
+            const firstRecord = records[0];
+            
+            const formatDate = (dateStr) => {
+                if (!dateStr) return '';
+                return dateStr;
+            };
+            
+            const getPeriodText = (r) => {
+                const start = formatDate(r.startDate);
+                const end = formatDate(r.endDate);
+                if (start && end) return `${start} ~ ${end}`;
+                if (start) return start;
+                if (end) return end;
+                return '';
+            };
+            
+            const getSummary = (r) => {
+                const period = getPeriodText(r);
+                const loc = r.location ? `[${r.location}]` : '';
+                const content = (r.content || '').substring(0, 30) + ((r.content || '').length > 30 ? '...' : '');
+                return `${period} ${loc} ${content}`.trim() || '-';
+            };
+            
+            if (isSingle) {
+                return `
+                    <div style="font-size:12px;color:var(--text);max-width:250px;">
+                        <div style="display:flex;align-items:center;gap:4px;cursor:pointer;" onclick="toggleGuaranteeExpand('${uniqueId}')">
+                            <span>${escapeHTML(getSummary(firstRecord))}</span>
+                            <span class="expand-icon" id="icon-${uniqueId}" style="color:var(--primary);">▼</span>
+                        </div>
+                        <div id="${uniqueId}" style="display:none;margin-top:6px;padding:8px;background:#f8fafc;border-radius:6px;">
+                            <div style="margin-bottom:4px;"><strong>时间段：</strong>${escapeHTML(getPeriodText(firstRecord) || '-')}</div>
+                            <div style="margin-bottom:4px;"><strong>地点：</strong>${escapeHTML(firstRecord.location || '-')}</div>
+                            <div style="white-space:pre-wrap;">${escapeHTML(firstRecord.content || '-')}</div>
+                        </div>
+                    </div>
+                `;
+            } else {
+                return `
+                    <div style="font-size:12px;color:var(--text);max-width:250px;">
+                        <div style="display:flex;align-items:center;gap:4px;cursor:pointer;" onclick="toggleGuaranteeExpand('${uniqueId}')">
+                            <span>${records.length} 条记录</span>
+                            <span class="expand-icon" id="icon-${uniqueId}" style="color:var(--primary);">▼</span>
+                        </div>
+                        <div id="${uniqueId}" style="display:none;margin-top:6px;padding:8px;background:#f8fafc;border-radius:6px;">
+                            ${records.map((r, idx) => `
+                                <div style="margin-bottom:8px;padding-bottom:8px;border-bottom:1px dashed var(--border);${idx === records.length - 1 ? 'margin-bottom:0;padding-bottom:0;border-bottom:none;' : ''}">
+                                    <div style="margin-bottom:2px;"><strong>记录 ${idx + 1}：</strong></div>
+                                    <div style="margin-bottom:2px;">时间段：${escapeHTML(getPeriodText(r) || '-')}</div>
+                                    <div style="margin-bottom:2px;">地点：${escapeHTML(r.location || '-')}</div>
+                                    <div style="white-space:pre-wrap;">${escapeHTML(r.content || '-')}</div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                `;
+            }
+        }
+
+        function toggleGuaranteeExpand(id) {
+            const content = document.getElementById(id);
+            const icon = document.getElementById(`icon-${id}`);
+            if (content && icon) {
+                const isHidden = content.style.display === 'none';
+                content.style.display = isHidden ? 'block' : 'none';
+                icon.textContent = isHidden ? '▲' : '▼';
+            }
+        }
+
         function openEquipmentModal(id = null) {
             document.getElementById('modal-equipment').classList.add('active');
             document.getElementById('equipment-id').value = id || '';
@@ -2196,9 +2339,7 @@
             document.getElementById('equipment-asset').value = '';
             document.getElementById('equipment-maintainer-name').value = '';
             document.getElementById('equipment-maintainer-phone').value = '';
-            document.getElementById('equipment-guarantee-date').value = '';
-            document.getElementById('equipment-guarantee-location').value = '';
-            document.getElementById('equipment-guarantee-records').value = '';
+            clearGuaranteeRecords();
             document.getElementById('equipment-image-preview').textContent = '';
             document.getElementById('equipment-image-url').value = '';
             document.getElementById('equipment-image-input').value = '';
@@ -2214,16 +2355,7 @@
                         document.getElementById('equipment-asset').value = data.asset_number || '';
                         document.getElementById('equipment-maintainer-name').value = data.maintainer_name || '';
                         document.getElementById('equipment-maintainer-phone').value = data.maintainer_phone || '';
-                        
-                        if (data.guarantee_records) {
-                            const parts = data.guarantee_records.split('|');
-                            const guaranteeDate = parts[0] || '';
-                            const guaranteeLoc = parts[1] || '';
-                            const guaranteeContent = parts[2] || '';
-                            document.getElementById('equipment-guarantee-date').value = guaranteeDate === '-' ? '' : guaranteeDate;
-                            document.getElementById('equipment-guarantee-location').value = guaranteeLoc === '-' ? '' : guaranteeLoc;
-                            document.getElementById('equipment-guarantee-records').value = guaranteeContent === '-' ? '' : guaranteeContent;
-                        }
+                        parseGuaranteeRecords(data.guarantee_records || '');
                         
                         if (data.image_url) {
                             document.getElementById('equipment-image-preview').innerHTML = `<img src="${data.image_url}" style="max-width:100%;max-height:120px;border-radius:8px;margin-top:4px;">`;
@@ -2240,15 +2372,15 @@
         }
 
         async function saveEquipment() {
+            updateGuaranteeRecordsHidden();
+            
             const id = document.getElementById('equipment-id').value;
             const equipment_name = document.getElementById('equipment-name').value.trim();
             const quantity = parseInt(document.getElementById('equipment-quantity').value) || 1;
             const asset_number = document.getElementById('equipment-asset').value.trim();
             const maintainer_name = document.getElementById('equipment-maintainer-name').value.trim();
             const maintainer_phone = document.getElementById('equipment-maintainer-phone').value.trim();
-            const guarantee_date = document.getElementById('equipment-guarantee-date').value;
-            const guarantee_location = document.getElementById('equipment-guarantee-location').value.trim();
-            const guarantee_content = document.getElementById('equipment-guarantee-records').value.trim();
+            const guarantee_records = document.getElementById('equipment-guarantee-records').value.trim();
             let image_url = document.getElementById('equipment-image-url').value;
 
             if (!equipment_name || !maintainer_name || !maintainer_phone) {
@@ -2269,11 +2401,6 @@
                     if (upErr) throw upErr;
                     const { data: urlData } = supabaseClient.storage.from('documents').getPublicUrl(filePath);
                     image_url = urlData.publicUrl;
-                }
-
-                let guarantee_records = '';
-                if (guarantee_date || guarantee_location || guarantee_content) {
-                    guarantee_records = `${guarantee_date || '-'}|${guarantee_location || '-'}|${guarantee_content || '-'}`;
                 }
 
                 const payload = {
@@ -2465,18 +2592,6 @@
                 await updateAdminBadges();
             } catch (err) {
                 showToast('操作失败：' + err.message);
-            }
-        }
-
-        async function deleteTroubleshootRecord(id) {
-            if (!confirm('确定删除该故障排查记录？')) return;
-            try {
-                const { error } = await supabaseClient.from('usage_stats').delete().eq('id', id);
-                if (error) throw error;
-                showToast('已删除');
-                await loadUsageStats(window.usageStatsCurrentPage, window.troubleshootCurrentPage, window.tokenCurrentPage);
-            } catch (err) {
-                showToast('删除失败：' + err.message);
             }
         }
 
@@ -2935,7 +3050,7 @@
 
             // ===== 故障排查记录（独立加载）=====
             try {
-                let tsQuery = supabaseClient.from('usage_stats').select('*').eq('intent', 'maintainer');
+                let tsQuery = supabaseClient.from('usage_stats').select('*').eq('intent', 'maintainer').order('created_at', { ascending: false });
                 if (!isAdmin) tsQuery = tsQuery.eq('user_id', currentUser.id);
                 const { data: tsData, error: tsError } = await tsQuery;
 
@@ -2963,7 +3078,7 @@
                 const endIdx = startIdx + tsPageSize;
                 const pageData = tsData ? tsData.slice(startIdx, endIdx) : [];
 
-                let tsHTML = '<table style="width:100%;font-size:13px;"><thead><tr><th>时间</th><th>装备</th><th>查询内容</th><th>回答内容</th>' + (isAdmin ? '<th>用户</th><th>操作</th>' : '') + '</tr></thead><tbody>';
+                let tsHTML = '<table style="width:100%;font-size:13px;"><thead><tr><th>时间</th><th>装备</th><th>查询内容</th><th>回答内容</th>' + (isAdmin ? '<th>用户</th>' : '') + '</tr></thead><tbody>';
                 if (pageData && pageData.length) {
                     pageData.forEach(r => {
                         const time = r.created_at ? new Date(r.created_at).toLocaleString('zh-CN') : (r.created_at === undefined ? '<span style="color:#94a3b8">未记录</span>' : '-');
@@ -2990,11 +3105,11 @@
                                 <div id="resp-full-${respId}" style="display:none;">${respText}</div>
                                 ${hasLongResp ? `<button type="button" id="resp-btn-${respId}" style="margin-top:6px; padding:3px 10px; font-size:11px; background:var(--primary); color:#fff; border:none; border-radius:6px; cursor:pointer; transition:var(--transition);" onclick="toggleResponseExpand('${respId}')">展开</button>` : ''}
                             </td>
-                            ${isAdmin ? `<td>${escapeHTML(userName)}</td><td><button type="button" class="btn-sm btn-reject" onclick="deleteTroubleshootRecord('${r.id}')">删除</button></td>` : ''}
+                            ${isAdmin ? `<td>${escapeHTML(userName)}</td>` : ''}
                         </tr>`;
                     });
                 } else {
-                    tsHTML += `<tr><td colspan="${isAdmin ? 6 : 4}" style="text-align:center;color:var(--text-light);">暂无故障排查记录</td></tr>`;
+                    tsHTML += `<tr><td colspan="${isAdmin ? 5 : 4}" style="text-align:center;color:var(--text-light);">暂无故障排查记录</td></tr>`;
                 }
                 tsHTML += '</tbody></table>';
                 document.getElementById('stats-troubleshoot').innerHTML = tsHTML;
@@ -3238,22 +3353,6 @@ function toggleResponseExpand(rowId) {
             let shortEl = document.getElementById('resp-short-' + rowId) || document.getElementById('query-short-' + rowId);
             let fullEl = document.getElementById('resp-full-' + rowId) || document.getElementById('query-full-' + rowId);
             let btnEl = document.getElementById('resp-btn-' + rowId) || document.getElementById('query-btn-' + rowId);
-            if (shortEl && fullEl && btnEl) {
-                if (fullEl.style.display === 'none') {
-                    fullEl.style.display = 'block';
-                    shortEl.style.display = 'none';
-                    btnEl.textContent = '收起';
-                } else {
-                    fullEl.style.display = 'none';
-                    shortEl.style.display = 'block';
-                    btnEl.textContent = '展开';
-                }
-            }
-        }
-        function toggleGuaranteeExpand(id) {
-            const shortEl = document.getElementById('gr-short-' + id);
-            const fullEl = document.getElementById('gr-full-' + id);
-            const btnEl = document.getElementById('gr-btn-' + id);
             if (shortEl && fullEl && btnEl) {
                 if (fullEl.style.display === 'none') {
                     fullEl.style.display = 'block';
