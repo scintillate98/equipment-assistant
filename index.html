@@ -263,7 +263,7 @@
                     <div class="message bot">
                         <div class="msg-avatar">🤖</div>
                         <div>
-                            <div class="msg-bubble">您好！我是 AI 设备操作维护助手。<br>我已接入大语言模型，可以<strong>理解 PDF、Word、文本文档</strong>后为您智能作答。<br>请先登录，然后直接提问。</div>
+                            <div class="msg-bubble">您好！我是中国电信上海应急通信局装备助手。<br>我已接入AI大模型，可以理解文档后为您智能作答，具备知识问答、故障排除、解说词生成、通讯报道撰写等多个能力。有什么需求请直接提问！</div>
                         </div>
                     </div>
                 </div>
@@ -1038,7 +1038,7 @@
             document.getElementById('chat-messages').innerHTML = `
                 <div class="message bot">
                     <div class="msg-avatar">🤖</div>
-                    <div><div class="msg-bubble">您好！我是 AI 设备操作维护助手。<br>我已接入大语言模型，可以<strong>理解 PDF、Word、文本文档</strong>后为您智能作答。<br>请先登录，然后直接提问。</div></div>
+                    <div><div class="msg-bubble">您好！我是中国电信上海应急通信局装备助手。<br>我已接入AI大模型，可以理解文档后为您智能作答，具备知识问答、故障排除、解说词生成、通讯报道撰写等多个能力。有什么需求请直接提问！</div></div>
                 </div>`;
             document.getElementById('input-area').style.display = 'none';
             showAuthModal();
@@ -1358,6 +1358,71 @@
             return name;
         }
 
+        // ==================== 装备名称提取 ====================
+        function extractEquipmentNames(input) {
+            const knownEquipments = [
+                '800兆集群基站车', '动中通', '通信指挥车', '智能头盔', 
+                'KAKU双频便携站', '便携站', '基站车', '卫星通信车'
+            ];
+            const found = [];
+            for (const eq of knownEquipments) {
+                if (input.includes(eq)) {
+                    found.push(eq);
+                }
+            }
+            return found.length > 0 ? found : ['未知装备'];
+        }
+
+        // ==================== 获取装备重大保障记录 ====================
+        async function getEquipmentGuaranteeInfo(equipmentName) {
+            try {
+                const { data: eqData, error: eqError } = await supabaseClient
+                    .from('equipment_info')
+                    .select('guarantee_records')
+                    .ilike('equipment_name', `%${equipmentName}%`)
+                    .maybeSingle();
+                
+                if (eqError || !eqData || !eqData.guarantee_records) {
+                    return null;
+                }
+                
+                const records = eqData.guarantee_records;
+                let info = '';
+                
+                if (typeof records === 'string') {
+                    try {
+                        const parsed = JSON.parse(records);
+                        if (Array.isArray(parsed) && parsed.length > 0) {
+                            parsed.forEach((record, index) => {
+                                if (record.startDate || record.location || record.content) {
+                                    info += `${index + 1}. `;
+                                    if (record.startDate) {
+                                        info += record.endDate 
+                                            ? `${record.startDate} ~ ${record.endDate}` 
+                                            : record.startDate;
+                                    }
+                                    if (record.location) {
+                                        info += ` | ${record.location}`;
+                                    }
+                                    if (record.content) {
+                                        info += ` | ${record.content.substring(0, 100)}${record.content.length > 100 ? '...' : ''}`;
+                                    }
+                                    info += '\n';
+                                }
+                            });
+                        }
+                    } catch {
+                        info = records.substring(0, 500);
+                    }
+                }
+                
+                return info || null;
+            } catch (e) {
+                console.log('获取保障记录失败:', e);
+                return null;
+            }
+        }
+
         // ==================== 意图识别 ====================
         function identifyIntent(input) {
             const s = input.toLowerCase();
@@ -1615,6 +1680,17 @@
             if (intent === 'beginner') systemPrompt += ` 你当前处于「知识问答」模式：请用通俗易懂的语言解释，避免过多专业术语，必要时给出操作步骤的分解说明。`;
             if (intent === 'narrator') systemPrompt += ` 你当前处于「解说词生成」模式：请生成一段正式的装备解说词，适合现场讲解或汇报使用，语言庄重、条理清晰。`;
             if (intent === 'report') systemPrompt += ` 你当前处于「通讯报道撰写」模式：请基于装备信息和提供的参考资料，撰写一篇新闻通讯稿、信息报道或宣传稿件。要求：标题亮眼、结构清晰（导语、主体、结尾）、语言生动、突出亮点或保障成效。`;
+            
+            if (intent === 'narrator' || intent === 'report') {
+                const equipmentNames = extractEquipmentNames(input);
+                for (const eqName of equipmentNames) {
+                    const guaranteeInfo = await getEquipmentGuaranteeInfo(eqName);
+                    if (guaranteeInfo) {
+                        systemPrompt += `\n\n【${eqName} - 重大保障记录】\n${guaranteeInfo}`;
+                    }
+                }
+            }
+            
             let userPrompt = input;
             let metaExtra = '';
             if (hasContext) {
